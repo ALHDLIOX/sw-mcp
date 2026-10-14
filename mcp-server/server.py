@@ -3609,6 +3609,10 @@ def read_artifact_resource(artifact_id: str) -> bytes:
     return data
 
 
+from scripts.sw_native_wire import register_tools as _register_native_wire_tools
+_register_native_wire_tools(mcp, connect_solidworks, _run_locked, ResponseFormat)
+
+
 def main() -> None:
     """Run the SolidWorks MCP server.
 
