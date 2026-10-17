@@ -10,7 +10,9 @@ on:
 
 jobs:
   test-and-build:
-    runs-on: windows-latest
+    # @brief 固定已验证的桌面验收环境，避免 windows-latest 的 Server 2025/WebView2 回归。
+    # 上游跟踪：https://github.com/actions/runner-images/issues/14738
+    runs-on: windows-2022
     permissions:
       contents: write
     steps:
@@ -45,6 +47,8 @@ jobs:
       - name: Install frontend dependencies
         working-directory: apps/workbench-ui
         run: npm ci
+      - name: Test package startup diagnostics
+        run: node --test tests/test_release_portable_wait.cjs
       - name: Test frontend
         working-directory: apps/workbench-ui
         run: npm test
@@ -109,6 +113,13 @@ jobs:
         run: node ai_team/release-portable-e2e.cjs
       - name: Test installer package
         run: powershell -NoProfile -File ai_team/nsis-install-e2e.ps1
+      - name: Upload package startup diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cad-studio-package-diagnostics
+          path: release-output/e2e-diagnostics.*
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v7
         with:
           name: cad-studio-windows-x64
