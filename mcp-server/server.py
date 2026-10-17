@@ -3610,7 +3610,10 @@ def read_artifact_resource(artifact_id: str) -> bytes:
 
 
 from scripts.sw_native_wire import register_tools as _register_native_wire_tools
-_register_native_wire_tools(mcp, connect_solidworks, _run_locked, ResponseFormat)
+# @brief 连接函数由持锁入口延迟加载，注册时不能提前解析尚未存在的全局名称。
+_register_native_wire_tools(
+    mcp, lambda **kwargs: connect_solidworks(**kwargs), _run_locked, ResponseFormat,
+)
 
 
 def main() -> None:
