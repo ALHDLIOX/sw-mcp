@@ -66,7 +66,8 @@ public static class NativeWireTools {
   return new{name=b.name,feature_type=f.GetTypeName2(),bounds_mm=Bounds(body)};
  }
  public static string Run(string input){
-  var r=json.Deserialize<Request>(input);var sw=Bind(r.process_id);var d=Guard(sw,r.source);var result=new Dictionary<string,object>{{"status","ok"},{"process_id",r.process_id},{"saved",false},{"manual_review_required",true}};
+  // @brief 只有导入请求保存；未执行保存不能用 saved=false 冒充保存失败。
+  var r=json.Deserialize<Request>(input);var sw=Bind(r.process_id);var d=Guard(sw,r.source);var result=new Dictionary<string,object>{{"status","ok"},{"process_id",r.process_id},{"save_requested",r.action=="import"},{"manual_review_required",true}};
   if(r.action=="inspect"){
    if(d.GetType()==1)result["bodies"]=Bodies(d).Select(BodyRow).ToArray();else if(d.GetType()==2)result["components"]=Components(d).Select(ComponentRow).ToArray();
    result["features"]=Features(d).Select(f=>new{name=f.Name,type=f.GetTypeName2()}).ToArray();
