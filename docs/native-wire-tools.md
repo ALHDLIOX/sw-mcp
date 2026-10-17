@@ -18,6 +18,8 @@
 
 结果中的 `save_requested` 表示本次操作是否请求保存。检查、预演、扫描、替换和实体排除不会返回表示保存失败的 `saved=false`；STEP 导入成功保存后返回 `save_requested=true, saved=true`。真正的保存失败仍返回执行错误，人工复核要求保留。
 
+MCP 与原生子进程使用 UTF-8 标准输入传递 JSON，请求上限为 1 MiB；64 条高精度路径和中文路径不会占用 Windows 命令行长度。短请求的 `-InputBase64` 调用保留兼容。
+
 验证：输入拒绝测试不启动 CAD；真实 SOLIDWORKS 版本和操作证据应单独记录。当前能力为 pilot，发布前需几何与视觉复核。
 ## 实机验证
 
