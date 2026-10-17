@@ -18,10 +18,14 @@ public static class NativeWireTools {
  [DllImport("ole32.dll")] static extern int CreateBindCtx(int reserved,out System.Runtime.InteropServices.ComTypes.IBindCtx context);
  static bool Same(string a,string b){return string.Equals(Path.GetFullPath(a),Path.GetFullPath(b),StringComparison.OrdinalIgnoreCase);}
  static ISldWorks Bind(int pid){
+  if(pid<=0)throw new Exception("Requested process unavailable");
   System.Runtime.InteropServices.ComTypes.IRunningObjectTable table;System.Runtime.InteropServices.ComTypes.IBindCtx context;
   GetRunningObjectTable(0,out table);CreateBindCtx(0,out context);
   System.Runtime.InteropServices.ComTypes.IEnumMoniker en;table.EnumRunning(out en);var ms=new System.Runtime.InteropServices.ComTypes.IMoniker[1];
-  while(en.Next(1,ms,IntPtr.Zero)==0){string name;ms[0].GetDisplayName(context,null,out name);if(name!="SolidWorks_PID_"+pid)continue;object obj;table.GetObject(ms[0],out obj);var sw=(ISldWorks)obj;if(sw.GetProcessID()!=pid)throw new Exception("PID mismatch");return sw;}
+  while(en.Next(1,ms,IntPtr.Zero)==0){string name;ms[0].GetDisplayName(context,null,out name);if(name!="SolidWorks_PID_"+pid&&name!="!SolidWorks_PID_"+pid)continue;object obj;table.GetObject(ms[0],out obj);var sw=(ISldWorks)obj;if(sw.GetProcessID()!=pid)throw new Exception("PID mismatch");return sw;}
+  // @brief 部分 2026 实例仅注册标准活动对象；只有 PID 与宿主完全一致才允许使用。
+  try{var active=(ISldWorks)Marshal.GetActiveObject("SldWorks.Application");if(active.GetProcessID()==pid)return active;}
+  catch(COMException){}
   throw new Exception("Requested process unavailable");
  }
  static IModelDoc2 Guard(ISldWorks sw,string path){var d=(IModelDoc2)sw.ActiveDoc;if(d==null||string.IsNullOrEmpty(d.GetPathName())||!Same(d.GetPathName(),path))throw new Exception("Active document target mismatch");return d;}
