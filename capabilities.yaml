@@ -484,7 +484,7 @@
       "backends": [
         "solidworks-csharp-pia"
       ],
-      "verified_versions": ["SOLIDWORKS 2026 SP4.1"],
+      "verified_versions": ["SOLIDWORKS 2026 SP4.1", "SOLIDWORKS 2026 SP01.1"],
       "dependencies": [
         "python",
         "SOLIDWORKS PIA"
