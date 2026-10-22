@@ -223,11 +223,11 @@ V2 附带 **37 个 deterministic reliability scenarios**，覆盖正常执行、
 
 ## License & Community
 
-[MIT](LICENSE) · [GitHub Issues](https://github.com/wzyn20051216/solidworks-automation-skill/issues) · [Star History](assets/star-history.svg)
+[MIT](LICENSE) · [GitHub Issues](https://github.com/wzyn20051216/solidworks-automation-skill/issues) · [Star History](https://star-history.com/#wzyn20051216/solidworks-automation-skill&Date)
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/star-history-dark.svg">
-  <img src="assets/star-history.svg" alt="SolidWorks Automation Skill 星标趋势" width="960">
+  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=wzyn20051216/solidworks-automation-skill&amp;type=Date&amp;theme=dark">
+  <img src="https://api.star-history.com/svg?repos=wzyn20051216/solidworks-automation-skill&amp;type=Date" alt="SolidWorks Automation Skill 星标趋势" width="960">
 </picture>
 
 ---
