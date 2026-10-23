@@ -90,11 +90,11 @@ def validate_snapshot(snapshot, spec, native=True):
     if native:
         summary = snapshot["features"]
         checks["healthy_features"] = not any(summary.get(k) for k in ("feature_error", "faulty_features", "warning_features", "unknown_feature_health"))
-        types = [f["type"] for f in summary["features"]]
-        checks["boss_and_cut"] = types.count("Boss") == 1 and types.count("Cut") == 1
+        types = [f.get("underlying_type", f["type"]) for f in summary["features"]]
+        checks["boss_and_cut"] = sum(t in {"Boss", "Extrusion"} for t in types) == 1 and types.count("Cut") == 1
         quality = snapshot["sketch_quality"]
         checks["fully_defined_editable_sketches"] = quality.get("status") == "pass" and len(quality.get("sketches", [])) == 2
-        checks["material_readback"] = snapshot["material"]["name"] == spec["material"] and bool(snapshot["material"]["database"])
+        checks["material_readback"] = snapshot["material"]["name"] == "6061-T6 (SS)" and bool(snapshot["material"]["database"])
         checks["material_density"] = close_enough(snapshot["mass"].get("density_kg_m3"), 2700, 1)
         checks["thickness_parameter"] = close_enough(snapshot.get("thickness_mm"), 10, tol)
     return {"status": "pass" if all(checks.values()) else "fail", "checks": checks,
@@ -155,6 +155,14 @@ def snapshot_model(model, boss_name=None):
         result.update(features=collect_model_summary(model), sketch_quality=inspect_model_sketches(model),
                       material={"name": name, "database": database.value},
                       thickness_mm=float(member(member(model, "Parameter", "D1@" + boss_name), "SystemValue")) * 1000)
+        # 官方规定 Instant3D 的 ICE 必须通过 GetTypeName 回读底层特征类型。
+        feature = member(model, "FirstFeature")
+        by_name = {item["name"]: item for item in result["features"]["features"]}
+        while feature is not None:
+            name = str(member(feature, "Name"))
+            if by_name[name]["type"] == "ICE":
+                by_name[name]["underlying_type"] = str(member(feature, "GetTypeName"))
+            feature = member(feature, "GetNextFeature")
     return result
 
 
@@ -203,7 +211,13 @@ def run_cad(output, report, spec):
         database = install / "lang" / "english" / "sldmaterials" / "solidworks materials.sldmat"
         if not database.is_file():
             raise RuntimeError("BLOCKED: 未找到原厂材料数据库")
-        member(model, "SetMaterialPropertyName2", "", str(database), spec["material"])
+        # 原厂库使用带 (SS) 后缀的精确条目名；不创建或篡改材料库。
+        import xml.etree.ElementTree as ET
+        material = next((item for item in ET.parse(database).iter("material") if item.get("name") == "6061-T6 (SS)"), None)
+        if material is None:
+            raise RuntimeError("BLOCKED: 原厂库未提供 6061-T6 (SS)")
+        report["material_library_entry"] = {"requested": spec["material"], "name": material.get("name"), "matid": material.get("matid")}
+        member(model, "SetMaterialPropertyName2", "", str(database), material.get("name"))
         report["material_database_sha256"] = sha256_file(database)
         for stage in ("built", "reopened"):
             if not member(model, "ForceRebuild3", False):

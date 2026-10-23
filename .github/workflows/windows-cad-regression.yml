@@ -30,6 +30,8 @@ jobs:
           python-version: "3.12"
       - name: Install test dependencies
         run: python -m pip install -r requirements.txt pytest
+      - name: Golden acceptance offline contracts
+        run: python -m pytest tests/test_solidworks_golden_mounting_bracket_2026.py tests/test_core_execution.py tests/test_eval_runner.py -q
       - name: Environment doctor
         run: python scripts/cad_doctor.py
       - name: Lifecycle stability simulation
@@ -48,8 +50,6 @@ jobs:
           CAD_STUDIO_VISIBLE: "false"
       - name: AutoCAD backend preflight
         run: python subskills/autocad-automation/scripts/acad_dotnet_preflight.py
-      - name: Golden acceptance offline contracts
-        run: python -m pytest tests/test_solidworks_golden_mounting_bracket_2026.py tests/test_core_execution.py tests/test_eval_runner.py -q
       - name: SolidWorks 2026 Golden mounting bracket (five independent runs)
         shell: pwsh
         run: python tests/solidworks_golden_mounting_bracket_2026.py --output "output/p0-golden-${{ github.run_id }}-${{ github.run_attempt }}" --runs 5

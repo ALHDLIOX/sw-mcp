@@ -21,7 +21,7 @@ def valid_measurements():
             "circular_edges": [[x, y, z, 3.5, True] for x, y in spec["hole_centers_mm"] for z in (0, 10)],
             "features": {"features": [{"type": "Boss"}, {"type": "Cut"}]},
             "sketch_quality": {"status": "pass", "sketches": [{}, {}]},
-            "material": {"name": "6061-T6", "database": "fixture.sldmat"}, "thickness_mm": 10}
+            "material": {"name": "6061-T6 (SS)", "database": "fixture.sldmat"}, "thickness_mm": 10}
 
 
 def test_analytic_volume_and_definition():
@@ -86,3 +86,12 @@ def test_cleanup_and_step_reopen_required():
         assert completion_gate(changed) == "failed"
     report["review"]["previews"].pop()
     assert completion_gate(report) == "blocked"
+
+
+def test_instant3d_underlying_type_must_be_read():
+    """@brief 接受已回读的 Cut 底层类型；未知 ICE 不可直接视为切除。"""
+    snapshot = valid_measurements()
+    snapshot["features"]["features"] = [{"type": "Extrusion"}, {"type": "ICE", "underlying_type": "Cut"}]
+    assert validate_snapshot(snapshot, load_case()[1])["status"] == "pass"
+    snapshot["features"]["features"][1].pop("underlying_type")
+    assert validate_snapshot(snapshot, load_case()[1])["status"] == "fail"
