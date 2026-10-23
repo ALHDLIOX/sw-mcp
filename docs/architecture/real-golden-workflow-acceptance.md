@@ -27,6 +27,9 @@ python tests/solidworks_golden_mounting_bracket_2026.py --output output/p0-golde
 和 `sw_export`，不重新实现 COM 连接器。完全定义草图保留驱动尺寸并拒绝 Fix；
 重建后从 B-Rep 独立读取一个实体、六个板体平面、四个内部圆柱面及八条圆边。
 逐孔验证直径、中心、法向、轴向长度及圆边与两个板面的邻接，排除盲孔。
+STEP 导入可能将一个完整孔壁拆成两个半圆柱面。验收保留原始面和边数据，
+另外按同轴几何归并面积，并用裁剪圆弧的真实长度证明两个入口各为完整圆周；
+缺失任一半面或半弧不能通过。不会仅按边数把槽弧视为孔，也不修改通用测量器。
 同时验证解析体积、包络、厚度参数、原生 Boss/Cut 特征与草图健康状态。
 从原厂材料库分配精确条目 `6061-T6 (SS)`（matid 164），回读材料名/数据库及
 实际质量体积反算密度；不把不存在的 `6061-T6` 条目或自定义属性当作材料分配。
@@ -62,3 +65,69 @@ STEP 回读验证交付几何，不要求保留原生草图或材料。COM 若�
 可访问自托管 CAD Runner。没有 PR/pull_request_target 触发，checkout 使用
 触发分支；只读令牌、串行运行、不取消前一轮清理。证据由既有 always 上传步骤保留。
 本地证据与离线结果应分别列出，禁止用 deterministic 37 场景 PASS 替代五轮真机结果。
+
+## 本次排错记录
+
+- 首次离线测试收集失败：本仓库 `tests` 不是 Python 包，改为复用现有 eval
+  测试的路径导入方式。修正后离线测试通过。
+- `output/p0-probe-01/run-01` 真机失败：不存在精确名为 `6061-T6` 的库条目，
+  原 API 调用没有产生材料；实际回读为空、密度 1000，被验收拒绝。同时检测到
+  SW2026 的特征类型为 `Extrusion/ICE`。修正为解析并使用原厂真实材料条目，
+  按官方接口回读 ICE 底层类型，未改核心连接或测量架构。
+- `output/p0-probe-02/run-01` 真机失败：原生件和 Review 规则通过，STEP 回读
+  产生八个半圆柱面和十六条半圆弧，原孔数规则拒绝。加入面积与完整圆周验证，
+  离线故障注入证明缺半面/半弧仍失败。两次失败均保留证据，清理通过。
+- 通用 Review 固定的人工复核标记未取消；它仍是无人值守完成的阻塞条件。
+
+## API 核查依据
+
+- [IFeature.GetTypeName2 与 Instant3D ICE 底层类型](https://help.solidworks.com/2022/English/api/sldworksapi/SolidWorks.Interop.sldworks~SolidWorks.Interop.sldworks.IFeature~GetTypeName2.html)
+- [ICurveParamData 的裁剪参数](https://help.solidworks.com/2026/english/api/sldworksapi/SolidWorks.Interop.sldworks~SolidWorks.Interop.sldworks.ICurveParamData_members.html)
+- [ICurve.GetLength3 的裁剪曲线长度](https://help.solidworks.com/2024/english/api/sldworksapi/SolidWorks.Interop.sldworks~SolidWorks.Interop.sldworks.ICurve~GetLength3.html?format=P&value=)
+
+## 2026-10-23 本机执行结果
+
+Base SHA：`f9d6efbecf297bcdfffc451de81ba3a7bdea6a0d`。
+真实验收执行代码 SHA：`0f27516082f9df132cb42d43a2f5f9ea33b47471`。
+本次文档和证据索引在执行后单独提交。环境：SolidWorks 2026 SP01.1，revision
+`34.1.1`，Python 3.12.10，Windows 11。
+
+离线全量结果：**900 passed / 1 skipped**（61.43 s）。跳过项是尚未生成桌面
+内嵌 Skill 的发布包检查；未把跳过项计作通过。deterministic mock eval 的
+37 个场景预期结果正确、escaped false completion 为 0；它不是 CAD 真机结果。
+
+| 轮次 | 独立 PID | 原生/重开/STEP 几何 | Review 规则 | 清理 | 验收终态 |
+| --- | --- | --- | --- | --- | --- |
+| 01 | 47484 | PASS | PASS / 100 | PASS | BLOCKED |
+| 02 | 14168 | PASS | PASS / 100 | PASS | BLOCKED |
+| 03 | 19516 | PASS | PASS / 100 | PASS | BLOCKED |
+| 04 | 29352 | PASS | PASS / 100 | PASS | BLOCKED |
+| 05 | 40840 | PASS | PASS / 100 | PASS | BLOCKED |
+
+五轮均为一个实体，原生件重开及 STEP 回读体积均为 **94460.6196 mm³**；
+四孔均为 Ø7，中心为 (±48, ±28) mm；两个草图均完全定义、无 Fix、无悬空，
+材料回读 `6061-T6 (SS)`，实际密度 2700 kg/m³。每轮进程启动前和退出后的
+快照为空，关闭后的剩余文档数为 0。每轮 17 项文件 hash 全部重新校验，
+共 85 项一致；Artifact Ledger 亦复核一致。
+
+**P0-1 没有完成：0/5 completed，5/5 blocked。** 唯一现存验收阻塞为通用
+Review 的 `manual_review_required=True`；没有取消标记或将其静默当作通过。
+真机命令因此按设计返回退出码 1。未执行 GitHub 自托管 Runner，也未验证其它版本、
+其它规格或无人复核交付。没有进行 merge。
+
+工作目录：`E:\desktop\sw-skills\p0-real-golden-2026`。
+
+```text
+output/p0-final-five-01/summary.json
+output/p0-final-five-01/run-01 ... run-05/
+output/p0-probe-01/run-01/              # 首次真机失败证据
+output/p0-probe-02/run-01/              # STEP 分面排错证据
+output/p0-offline/                     # 离线日志和 deterministic eval
+output/p0-evidence-20261023.zip         # 全部报告、日志、CAD、预览、hash
+```
+
+证据包 SHA-256：
+`01b6f43954d6304c5f72c3de99a6ecf6206333347063cec3cae5dd1b1fd9071a`。
+原生/STEP 二进制与 BMP 不提交到 Git；可审查的
+[结构化索引](evidence/p0-real-golden-2026-10-23.json)包含每轮报告和清单的 SHA-256。
+[Draft PR #39](https://github.com/wzyn20051216/solidworks-automation-skill/pull/39)。
