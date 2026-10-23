@@ -1,6 +1,6 @@
 # SolidWorks 2026 真实 Golden Workflow 验收
 
-本验收面向自动化维护者与 QA，验证 P0-1 `mounting_bracket`。规格从
+本验收面向自动化维护者与 QA，验证 P0-1 / P0-1.1 `mounting_bracket`。规格从
 `golden-workflows.yaml` 的 `real_acceptance_2026` 读取：120 × 80 × 10 mm，
 4 × Ø7 贯穿孔，孔中心 X=±48、Y=±28 mm，原厂材料库 6061-T6。
 解析体积为 94460.619599741 mm³；长度容差 0.01 mm，体积容差 0.05 mm³。
@@ -15,6 +15,8 @@ deterministic eval；后者使用夹具，不能证明 CAD 能力。
 python -m pytest tests/test_solidworks_golden_mounting_bracket_2026.py tests/test_core_execution.py tests/test_eval_runner.py -q
 python tests/evals/runner.py --output-dir output/p0-offline-eval
 python tests/solidworks_golden_mounting_bracket_2026.py --output output/p0-golden-unique --runs 5
+# P0-1.1：显式验收五轮正确人工门禁；业务任务仍然 blocked。
+python tests/solidworks_golden_mounting_bracket_2026.py --output output/p0-11-golden-unique --runs 5 --expected-terminal blocked
 ```
 
 输出根目录必须不存在；每轮目录独立且拒绝覆盖。每轮先保存 preflight/doctor
@@ -39,7 +41,7 @@ SW2026 Instant3D 返回 `ICE` 时按官方规则用 `GetTypeName` 回读底层 C
 保存 SLDPRT 后关闭、重新打开并重新采集完整证据。STEP 必须非空且具有
 ISO-10303-21 文件头，再由真实 SolidWorks 导入，复核实体与几何。
 审查复用四视角 BMP 和原有规则；不忽略 WARN/FAIL、未知值或人工复核标志。
-通过 Execution Core 记录终态与 trace，通过 Artifact Ledger 记录产物与 hash。
+CAD 流程结束后通过 Execution Core 适配终态与 trace，通过 Artifact Ledger 记录产物与 hash。
 `sha256.json` 覆盖本轮日志、诊断、几何证据、原生件、STEP、预览、Review、
 报告、trace 和 ledger（清单自身不自哈希）。失败保留已有产物，不删日志。
 
@@ -51,7 +53,8 @@ ISO-10303-21 文件头，再由真实 SolidWorks 导入，复核实体与几何�
 
 当前通用 `sw_review.evaluate_review_report` 固定返回
 `manual_review_required=True`。即使所有几何检查和规则评分通过，终态也只能是
-`blocked`，退出码非零。该验收不会取消原审查要求以取得绿灯。
+`task_status=blocked`。默认严格完成模式返回非零；P0-1.1 显式预期阻塞模式可在
+全部独立证据通过时报告 `acceptance_status=passed`、返回 0。该验收不会取消人工审查要求。
 需后续经过审查的自动审查能力才能满足无人复核的五轮 `completed` 标准。
 
 本测试不证明其它尺寸、装配、工程图、复杂孔、材料力学性质或多版本兼容性。
@@ -65,6 +68,42 @@ STEP 回读验证交付几何，不要求保留原生草图或材料。COM 若�
 可访问自托管 CAD Runner。没有 PR/pull_request_target 触发，checkout 使用
 触发分支；只读令牌、串行运行、不取消前一轮清理。证据由既有 always 上传步骤保留。
 本地证据与离线结果应分别列出，禁止用 deterministic 37 场景 PASS 替代五轮真机结果。
+
+硬编码分支是当前验收期的安全白名单：即使 PR 合并到 main，main 上手动触发也会
+因 job 条件不符而跳过；删除该测试分支后没有可执行的真机入口。后续维护需单独
+审查并更新受控分支白名单及 Runner 保护规则，不能改为任意分支前缀匹配、PR
+触发或可由外部传入 checkout ref。本阶段保留此限制，不擅自放宽。
+
+## P0-1.1 状态传播审计与边界
+
+生产代码未修改：`sw_review.py` 仍输出原始规则结果和人工标志；
+`core/verification.py` 可适配规则 PASS 并保留人工要求；`core/execution.py`
+只在明确 PASS 且无需人工复核时 completed，否则按既有规则 blocked/failed。
+
+旧真机脚本先把汇总状态设为 blocked，再以该状态作为 Core handler 结果。
+Core 将其视为工具失败，未进入 Verification。因此旧记录只证明终态没有假成功，
+不证明人工 Review 的 Core 传播链已经实际执行。
+
+P0-1.1 在测试适配层把真实 CAD 执行事实与 Review 结果分开输入：CAD 成功时
+handler success=true，原始 Review 完整保留，适配后的规则 PASS 与人工标志
+进入 Verification。预期 trace 为 `tool.succeeded → verification.passed → run.blocked`，
+Recovery 为 `user_action_required`。Core 仍在整个 CAD 流程及清理结束后调用；
+报告明确标记 `core_scope=terminal_adaptation_only`，**没有验证真实 CAD 步骤由
+Core 调度**，也没有新增自动审查策略。
+
+schema 1.1 增加两个独立结果：`task_status` 为 completed/blocked/failed，
+`acceptance_status` 为 passed/failed。旧 `status` 字段仅作为 task_status 的兼容别名。
+`--expected-terminal` 默认 completed，人工要求未解除就返回非零；显式 blocked
+模式强制 `--runs 5`，仅当五轮独立真机、所有几何/材料/草图/特征、重开、STEP、
+原始 Review 规则、完整证据和清理都通过，且 Core 实际阻塞原因仅为人工要求时
+验收通过。未知原因、额外阻塞、WARN/FAIL、缺文件、哈希或 Ledger 不全、清理失败、
+Core/报告不一致和重复实例均不通过。套件结束再次核验每轮磁盘产物，防止早期
+通过的文件在后续轮次中丢失。退出码按 acceptance_status，绝不修改 task_status。
+
+证据先封存并核验，再计算验收结果；最终报告写入后重新生成 Ledger/清单并校验，
+避免报告和哈希相互引用。Ledger 不哈希自身；SHA-256 清单包含 Ledger，不包含清单
+自身。封存异常会记录失败并返回非零。离线故障注入使用临时目录的合成契约数据，
+不被统计为真实 CAD 结果。
 
 ## 本次排错记录
 

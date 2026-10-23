@@ -25,6 +25,10 @@ from scripts.core.execution import execute_with_core
 from apps.desktop.cad_workbench.artifact_ledger import write_artifact_ledger, sha256_file
 
 VIEWS = ("isometric", "front", "top", "right")
+MANUAL_REVIEW_BLOCK = "EXPECTED_MANUAL_REVIEW_REQUIRED"
+REVIEW_CHECKS = ("rebuild_succeeded", "model_available", "previews_created", "previews_not_blank",
+                 "expected_outputs_exist", "feature_summary_available", "geometry_measurements_available",
+                 "geometry_measurements_error_free", "feature_errors_absent")
 
 
 def write_json(path, payload):
@@ -129,19 +133,177 @@ def validate_snapshot(snapshot, spec, native=True):
             "failed_checks": [k for k, v in checks.items() if not v]}
 
 
-def completion_gate(report):
-    """@brief 完成条件独立于 API 返回；Review 人工标记不能被规则 PASS 抹去。"""
-    if report.get("error") or report.get("cleanup", {}).get("status") != "pass":
-        return "failed"
+def workflow_checks(report, spec):
+    """@brief 从实际测量重新判定执行事实，不把缓存 PASS 或 BLOCKED 字样当作通过。"""
+    connection, cleanup = report.get("connection", {}), report.get("cleanup", {})
+    pid = connection.get("process_id")
+    checks = {"no_execution_error": not report.get("error"),
+              "real_2026_owned_instance": report.get("backend") == "real-solidworks-2026" and report.get("mock") is False
+              and report.get("version", {}).get("year") == 2026 and connection.get("actual_version") == 2026
+              and connection.get("requested_version") == 2026 and connection.get("started_by_cad_studio") is True
+              and type(pid) is int and pid > 0 and report.get("processes_before") == {},
+              "safe_cleanup": cleanup.get("status") == "pass" and cleanup.get("owned_pid") == pid
+              and cleanup.get("remaining_documents") == 0 and cleanup.get("exit_requested") is True
+              and cleanup.get("processes_after") == {} and cleanup.get("errors") == []}
     for stage in ("built", "reopened", "step_reopened"):
-        if report.get(stage, {}).get("validation", {}).get("status") != "pass":
-            return "failed"
-    review = report.get("review", {}).get("evaluation", {})
-    if review.get("status") != "pass" or review.get("manual_review_required") is not False:
-        return "blocked"
-    if len(report.get("review", {}).get("previews", [])) != 4:
-        return "blocked"
-    return "completed"
+        try:
+            snapshot = report[stage]
+            validation = validate_snapshot(snapshot, spec, native=stage != "step_reopened")
+            checks[stage] = validation["status"] == "pass" and snapshot.get("validation") == validation
+        except (KeyError, TypeError, ValueError, ArithmeticError):
+            checks[stage] = False
+    for name in ("base_constraints", "hole_constraints"):
+        quality = report.get(name, {})
+        checks[name] = (quality.get("status") == "pass" and quality.get("constrained_status") == 3
+                        and quality.get("fix_count") == 0 and (quality.get("dimension_count") or 0) > 0 and quality.get("errors") == [])
+    review = report.get("review", {})
+    evaluation = review.get("evaluation", {})
+    checks["review_rules"] = (evaluation.get("status") == "pass" and evaluation.get("issues") == []
+                              and all(review.get("checks", {}).get(k) is True for k in REVIEW_CHECKS))
+    previews = review.get("previews", [])
+    expected = {str(Path(report.get("output_dir", "")) / "review" / f"mounting_bracket_{v}.bmp") for v in VIEWS}
+    checks["four_previews"] = len(previews) == 4 and {p.get("path") for p in previews} == expected and all(
+        p.get("exists") is True and p.get("likely_blank") is False and p.get("width", 0) >= 640
+        and p.get("height", 0) >= 480 and p.get("size_bytes", 0) >= 10000 for p in previews)
+    checks["known_manual_requirement"] = type(evaluation.get("manual_review_required")) is bool
+    return checks
+
+
+def adapt_terminal(report, output, spec):
+    """@brief 仅适配已完成的 CAD 流程终态；Core 没有调度实际建模步骤。
+
+    @details 保留原始 Review；只把规则状态与人工标记翻译为 Verification 的正式输入。
+    """
+    checks = workflow_checks(report, spec)
+    evaluation = report.get("review", {}).get("evaluation", {})
+    succeeded = all(value for name, value in checks.items() if name != "review_rules")
+    raw = {"success": succeeded, "status": "ok" if succeeded else "blocked" if "BLOCKED:" in report.get("error", "") else "failed",
+           "manual_review_required": evaluation.get("manual_review_required", True),
+           "message": "真实 CAD 流程结束后的终态适配"}
+    # evaluation.issues 是通用审查说明，而非 Verification 的带 status 检查；原文留在 report。
+    reviewer = {"status": evaluation.get("status"), "manual_review_required": evaluation.get("manual_review_required", True),
+                "reason": evaluation.get("manual_review_reason"),
+                "evidence": [{"path": report.get("review_path"), "scope": "original_review"}]}
+    assessment = execute_with_core(handler=lambda _: raw, run_id=output.name, tool_name="golden_terminal_adapter",
+                                   capability_id="part_and_features", requires_review=True, reviewer_result=reviewer,
+                                   trace_dir=output / "trace")
+    core = assessment.to_dict()
+    report.update(execution_core=core, core_scope="terminal_adaptation_only", workflow_checks=checks,
+                  task_status=core["status"], status=core["status"], manual_review_required=evaluation.get("manual_review_required"))
+    if core["status"] == "blocked" and all(checks.values()) and evaluation.get("manual_review_required") is True:
+        report["blocking_reasons"] = [MANUAL_REVIEW_BLOCK]
+    else:
+        report["blocking_reasons"] = [name for name, value in checks.items() if not value]
+        if core["status"] == "blocked" and not report["blocking_reasons"]:
+            report["blocking_reasons"] = ["UNEXPECTED_CORE_BLOCK"]
+
+
+def acceptance_result(report, spec, expected_terminal, integrity):
+    """@brief 测试验收与业务终态独立；只有明确、唯一的预期人工阻塞可以通过。"""
+    checks = workflow_checks(report, spec)
+    core = report.get("execution_core", {})
+    verification = core.get("verification") or {}
+    task = report.get("task_status")
+    checks.update(evidence_integrity=integrity.get("status") == "pass" and integrity.get("errors") == [],
+                  terminal_matches=task == expected_terminal and report.get("status") == task and core.get("status") == task,
+                  core_execution_succeeded=core.get("execution", {}).get("success") is True and core.get("exception") is None,
+                  core_scope=report.get("core_scope") == "terminal_adaptation_only",
+                  core_verified=core.get("requires_review") is True and verification.get("status") == "PASS"
+                  and verification.get("error_code") is None)
+    if expected_terminal == "blocked":
+        checks["only_expected_manual_block"] = (report.get("manual_review_required") is True
+            and report.get("review", {}).get("evaluation", {}).get("manual_review_required") is True
+            and verification.get("manual_review_required") is True and report.get("blocking_reasons") == [MANUAL_REVIEW_BLOCK]
+            and (core.get("recovery") or {}).get("decision") == "user_action_required"
+            and core.get("step", {}).get("status") == "blocked")
+    else:
+        checks["no_manual_review_needed"] = (report.get("manual_review_required") is False
+            and verification.get("manual_review_required") is False and report.get("blocking_reasons") == []
+            and core.get("recovery") is None)
+    return {"acceptance_status": "passed" if all(checks.values()) else "failed", "expected_terminal": expected_terminal,
+            "checks": checks, "failed_checks": [name for name, value in checks.items() if not value]}
+
+
+def required_evidence(run_id):
+    """@brief 固定必需交付物集合，不能按当前碰巧存在的文件减少验收要求。"""
+    return {"mounting_bracket.SLDPRT", "mounting_bracket.step", "built.json", "reopened.json", "step_reopened.json",
+            "preflight.log", "doctor.log", "run.log", "report.json", f"trace/events/{run_id}.jsonl",
+            "review/mounting_bracket_review_report.json", "review/mounting_bracket_review_summary.md",
+            *(f"review/mounting_bracket_{view}.bmp" for view in VIEWS)}
+
+
+def inspect_evidence(output, report):
+    """@brief 回读文件、哈希和 Ledger，校验覆盖集合、来源及报告关联；未知即失败。"""
+    errors = []
+    try:
+        output = output.resolve()
+        load = lambda p: json.loads(p.read_text(encoding="utf-8"))
+        manifest = load(output / "sha256.json")
+        entries = {}
+        for entry in manifest:
+            path = output / entry["path"]
+            if Path(entry["path"]).is_absolute() or not path.resolve().is_relative_to(output):
+                raise ValueError("HASH_PATH_OUTSIDE_RUN")
+            key = path.relative_to(output).as_posix()
+            if key in entries or not path.is_file() or path.stat().st_size <= 0:
+                raise ValueError(f"MISSING_DUPLICATE_OR_EMPTY_ARTIFACT: {key}")
+            if entry["size_bytes"] != path.stat().st_size or entry["sha256"] != sha256_file(path):
+                raise ValueError(f"ARTIFACT_HASH_MISMATCH: {key}")
+            entries[key] = entry
+        actual = {p.relative_to(output).as_posix() for p in output.rglob("*") if p.is_file() and p.name != "sha256.json"}
+        ledger_key = f"ledgers/{output.name}.ledger.json"
+        if set(entries) != actual or not (required_evidence(output.name) | {ledger_key}).issubset(entries):
+            raise ValueError("EVIDENCE_COVERAGE_INCOMPLETE")
+        if load(output / "report.json") != report:
+            raise ValueError("REPORT_CONTENT_MISMATCH")
+        for stage in ("built", "reopened", "step_reopened"):
+            if load(output / f"{stage}.json") != report.get(stage):
+                raise ValueError(f"SNAPSHOT_CONTENT_MISMATCH: {stage}")
+        disk_review = load(output / "review/mounting_bracket_review_report.json")
+        if disk_review != report.get("review"):
+            raise ValueError("REVIEW_CONTENT_MISMATCH")
+        ledger = load(output / ledger_key)
+        if (ledger["executor"] != "solidworks-com-pywin32" or ledger["status"] != report["task_status"]
+                or ledger["runId"] != output.name or ledger["jobId"] != output.name
+                or ledger["verification"] != [report["execution_core"]]):
+            raise ValueError("LEDGER_PROVENANCE_MISMATCH")
+        ledger_paths = set()
+        for entry in ledger["artifacts"]:
+            path = Path(entry["path"])
+            key = path.resolve().relative_to(output).as_posix()
+            if key in ledger_paths or key not in entries or not entry["exists"] or entry["isDirectory"] or entry.get("producedThisRun") is not True:
+                raise ValueError("LEDGER_ARTIFACT_INVALID")
+            if entry["sha256"] != entries[key]["sha256"] or entry["sizeBytes"] != entries[key]["size_bytes"]:
+                raise ValueError("LEDGER_HASH_MISMATCH")
+            ledger_paths.add(key)
+        if ledger_paths != set(entries) - {ledger_key}:
+            raise ValueError("LEDGER_COVERAGE_INCOMPLETE")
+        # 追踪文件来自真实 Core 适配，须有验证及准确终态，不能把工具失败冒充人工阻塞。
+        events = [json.loads(line) for line in (output / "trace" / "events" / f"{output.name}.jsonl").read_text(encoding="utf-8").splitlines()]
+        types = [item["type"] for item in events]
+        if (report.get("blocking_reasons") == [MANUAL_REVIEW_BLOCK]
+                and ("tool.failed" in types or "tool.succeeded" not in types or "verification.passed" not in types)):
+            raise ValueError("CORE_TRACE_SEMANTICS_MISMATCH")
+        if types[-1] != "run." + report["task_status"] or ("run.completed" in types and report["task_status"] != "completed"):
+            raise ValueError("CORE_TRACE_TERMINAL_MISMATCH")
+    except (OSError, ValueError, KeyError, TypeError, IndexError) as error:
+        errors.append(f"{type(error).__name__}: {error}")
+    return {"status": "pass" if not errors else "fail", "errors": errors}
+
+
+def write_evidence_bundle(output, report):
+    """@brief 封存本轮报告、Ledger 与清单；排除 Ledger/清单自引用。"""
+    write_json(output / "report.json", report)
+    ledger_path = output / "ledgers" / f"{output.name}.ledger.json"
+    files = [p for p in output.rglob("*") if p.is_file() and p not in {output / "sha256.json", ledger_path}]
+    write_artifact_ledger(output, {"id": output.name, "runId": output.name, "executor": "solidworks-com-pywin32",
+                                  "status": report["task_status"], "cwd": str(output)},
+                          {"artifacts": [{"kind": p.suffix.lstrip("."), "path": str(p)} for p in files],
+                           "artifactBaseline": {}, "verification": [report["execution_core"]]})
+    files.append(ledger_path)
+    write_json(output / "sha256.json", [{"path": p.relative_to(output).as_posix(), "size_bytes": p.stat().st_size,
+                                        "sha256": sha256_file(p)} for p in sorted(files)])
+    return inspect_evidence(output, report)
 
 
 def snapshot_model(model, boss_name=None):
@@ -319,13 +481,32 @@ def run_cad(output, report, spec):
             cleanup["status"] = "pass"
 
 
-def run_once(output):
+def finalize_report(output, report, spec, expected_terminal):
+    """@brief 核验后封存双状态报告；证据写入异常只允许验收失败。"""
+    report["ledger_path"] = str(output / "ledgers" / f"{output.name}.ledger.json")
+    try:
+        integrity = write_evidence_bundle(output, report)
+        result = acceptance_result(report, spec, expected_terminal, integrity)
+        report.update(evidence_integrity=integrity, acceptance=result, acceptance_status=result["acceptance_status"])
+        final_integrity = write_evidence_bundle(output, report)
+        if final_integrity["status"] != "pass":
+            raise RuntimeError(str(final_integrity))
+    except Exception:
+        report.update(acceptance_status="failed", evidence_integrity={"status": "fail", "errors": [traceback.format_exc()]})
+        if "acceptance" in report:
+            report["acceptance"]["acceptance_status"] = "failed"
+        write_json(output / "report.json", report)
+    return report
+
+
+def run_once(output, expected_terminal="completed"):
     """@brief 保存所有失败、日志、Execution Core、Artifact Ledger 与文件 SHA-256。"""
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     workflow, spec = load_case()
-    report = {"schema_version": "1.0", "backend": "real-solidworks-2026", "mock": False,
-              "status": "failed", "workflow": workflow, "expected_volume_mm3": expected_volume(spec),
+    report = {"schema_version": "1.1", "backend": "real-solidworks-2026", "mock": False,
+              "status": "failed", "task_status": "failed", "acceptance_status": "failed",
+              "expected_terminal": expected_terminal, "workflow": workflow, "expected_volume_mm3": expected_volume(spec),
               "generated_at": datetime.now(timezone.utc).isoformat(), "output_dir": str(output),
               "source_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()}
     with (output / "run.log").open("w", encoding="utf-8", buffering=1) as log, redirect_stdout(log), redirect_stderr(log):
@@ -341,48 +522,66 @@ def run_once(output):
         except Exception:
             report["error"] = traceback.format_exc()
             print(report["error"], flush=True)
-        report["status"] = completion_gate(report)
-        if "BLOCKED:" in report.get("error", ""):
-            report["status"] = "blocked"
-        if report["status"] == "blocked":
-            report["blocking_reason"] = report.get("error") or report["review"]["evaluation"]
-        raw = {"success": report["status"] != "failed", "status": report["status"],
-               "manual_review_required": report.get("review", {}).get("evaluation", {}).get("manual_review_required", True)}
-        assessment = execute_with_core(handler=lambda _: raw, run_id=output.name, tool_name="real_golden_mounting_bracket_2026",
-                                       capability_id="part_and_features", requires_review=True,
-                                       reviewer_result={"status": "pass" if report["status"] == "completed" else report["status"],
-                                                        "manual_review_required": raw["manual_review_required"]}, trace_dir=output / "trace")
-        report["execution_core"] = assessment.to_dict()
-        if report["status"] == "completed" and assessment.run_context.status.value != "completed":
-            report["status"] = "blocked"
-        print(json.dumps({"status": report["status"], "cleanup": report.get("cleanup")}, ensure_ascii=False), flush=True)
-    report["ledger_path"] = str(output / "ledgers" / f"{output.name}.ledger.json")
-    write_json(output / "report.json", report)
-    files = [p for p in output.rglob("*") if p.is_file()]
-    ledger = write_artifact_ledger(output, {"id": output.name, "runId": output.name, "executor": "solidworks-com-pywin32",
-                                          "status": report["status"], "cwd": str(output)},
-                                  {"artifacts": [{"kind": p.suffix.lstrip("."), "path": str(p)} for p in files],
-                                   "artifactBaseline": {}, "verification": [report["execution_core"]]})
-    files.append(Path(ledger["ledgerPath"]))
-    write_json(output / "sha256.json", [{"path": str(p.relative_to(output)), "size_bytes": p.stat().st_size,
-                                        "sha256": sha256_file(p)} for p in sorted(files)])
-    print(f"{output.name}: {report['status']} — {output / 'report.json'}", flush=True)
+        adapt_terminal(report, output, spec)
+        print(json.dumps({"task_status": report["task_status"], "core_scope": report["core_scope"],
+                          "blocking_reasons": report["blocking_reasons"], "cleanup": report.get("cleanup")}, ensure_ascii=False), flush=True)
+    finalize_report(output, report, spec, expected_terminal)
+    print(f"{output.name}: acceptance_status={report['acceptance_status']}, task_status={report['task_status']} — {output / 'report.json'}", flush=True)
     return report
 
 
-def main():
-    """@brief 每轮独立进程生命周期；任一非 completed 均返回非零。"""
+def summarize_runs(reports, spec, expected_terminal):
+    """@brief 套件结束时再次读取全部证据；预期 BLOCKED 模式强制五个独立真机实例。"""
+    rows, workflow = [], []
+    for report in reports:
+        integrity = inspect_evidence(Path(report["output_dir"]), report)
+        result = acceptance_result(report, spec, expected_terminal, integrity)
+        if report.get("acceptance_status") != result["acceptance_status"]:
+            result["acceptance_status"] = "failed"
+            result["failed_checks"].append("stored_acceptance_mismatch")
+        checks = workflow_checks(report, spec)
+        workflow.append(checks)
+        rows.append({"task_status": report.get("task_status"), "acceptance_status": result["acceptance_status"],
+                     "failed_checks": result["failed_checks"], "evidence_integrity": integrity,
+                     "report": str(Path(report["output_dir"]) / "report.json")})
+    pids = [report.get("connection", {}).get("process_id") for report in reports]
+    suite_checks = {"runs_present": bool(reports), "all_runs_accepted": all(row["acceptance_status"] == "passed" for row in rows),
+                    "independent_processes": len(set(pids)) == len(pids) and all(type(pid) is int and pid > 0 for pid in pids),
+                    "five_runs_for_expected_block": expected_terminal != "blocked" or len(reports) == 5}
+    tasks = [row["task_status"] for row in rows]
+    task = "failed" if any(t not in {"completed", "blocked"} for t in tasks) or not tasks else "blocked" if "blocked" in tasks else "completed"
+    geometry_keys = ("real_2026_owned_instance", "built", "reopened", "step_reopened", "base_constraints", "hole_constraints")
+    false_completions = sum((r.get("task_status") == "completed" or r.get("execution_core", {}).get("status") == "completed")
+                            and (r.get("manual_review_required") is not False or not all(c.values())
+                                 or row["evidence_integrity"]["status"] != "pass"
+                                 or r.get("execution_core", {}).get("status") != r.get("task_status"))
+                            for r, c, row in zip(reports, workflow, rows))
+    return {"schema_version": "1.1", "backend": "real-solidworks-2026", "mock": False, "status": task, "task_status": task,
+            "acceptance_status": "passed" if all(suite_checks.values()) else "failed", "expected_terminal": expected_terminal,
+            "suite_checks": suite_checks, "runs": rows,
+            "metrics": {"run_count": len(reports), "geometry_success_count": sum(all(c[k] for k in geometry_keys) for c in workflow),
+                        "expected_gate_correct_count": sum(row["acceptance_status"] == "passed" for row in rows),
+                        "task_completion_count": tasks.count("completed"),
+                        "test_acceptance_count": sum(row["acceptance_status"] == "passed" for row in rows),
+                        "false_completion_count": false_completions,
+                        "cleanup_success_count": sum(c["safe_cleanup"] for c in workflow)}}
+
+
+def main(argv=None):
+    """@brief 默认严格完成；显式 blocked 模式仅验收五轮正确人工阻塞，不放宽业务门禁。"""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--runs", type=int, choices=range(1, 6), default=1)
-    args = parser.parse_args()
+    parser.add_argument("--expected-terminal", choices=("completed", "blocked"), default="completed")
+    args = parser.parse_args(argv)
+    if args.expected_terminal == "blocked" and args.runs != 5:
+        parser.error("--expected-terminal blocked 必须结合 --runs 5")
     args.output.mkdir(parents=True, exist_ok=False)
-    reports = [run_once(args.output / f"run-{i:02d}") for i in range(1, args.runs + 1)]
-    summary = {"backend": "real-solidworks-2026", "mock": False,
-               "status": "completed" if all(r["status"] == "completed" for r in reports) else "failed" if any(r["status"] == "failed" for r in reports) else "blocked",
-               "runs": [{"status": r["status"], "report": str(Path(r["output_dir"]) / "report.json")} for r in reports]}
+    reports = [run_once(args.output / f"run-{i:02d}", args.expected_terminal) for i in range(1, args.runs + 1)]
+    summary = summarize_runs(reports, load_case()[1], args.expected_terminal)
     write_json(args.output / "summary.json", summary)
-    return 0 if summary["status"] == "completed" else 1
+    print(json.dumps(summary, ensure_ascii=False, indent=2), flush=True)
+    return 0 if summary["acceptance_status"] == "passed" else 1
 
 
 if __name__ == "__main__":
