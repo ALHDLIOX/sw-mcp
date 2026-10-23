@@ -15,6 +15,7 @@ import subprocess
 import sys
 import time
 import traceback
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -23,6 +24,8 @@ sys.path.insert(0, str(ROOT / "tests"))
 from evals.runner import load_golden_workflows
 from scripts.core.execution import execute_with_core
 from apps.desktop.cad_workbench.artifact_ledger import write_artifact_ledger, sha256_file
+from golden_workflow_support import (CASE_REGISTRY, evidence_paths, safe_output_path, load_runtime_config,
+                                     diagnose_runtime, resolve_material_database, process_created_at, validate_core_trace, valid_process_identity)
 
 VIEWS = ("isometric", "front", "top", "right")
 MANUAL_REVIEW_BLOCK = "EXPECTED_MANUAL_REVIEW_REQUIRED"
@@ -126,7 +129,7 @@ def validate_snapshot(snapshot, spec, native=True):
         checks["boss_and_cut"] = sum(t in {"Boss", "Extrusion"} for t in types) == 1 and types.count("Cut") == 1
         quality = snapshot["sketch_quality"]
         checks["fully_defined_editable_sketches"] = quality.get("status") == "pass" and len(quality.get("sketches", [])) == 2
-        checks["material_readback"] = snapshot["material"]["name"] == "6061-T6 (SS)" and bool(snapshot["material"]["database"])
+        checks["material_readback"] = snapshot["material"]["name"] == spec.get("material_library_entry", "6061-T6 (SS)") and bool(snapshot["material"]["database"])
         checks["material_density"] = close_enough(snapshot["mass"].get("density_kg_m3"), 2700, 1)
         checks["thickness_parameter"] = close_enough(snapshot.get("thickness_mm"), 10, tol)
     return {"status": "pass" if all(checks.values()) else "fail", "checks": checks,
@@ -138,10 +141,14 @@ def workflow_checks(report, spec):
     connection, cleanup = report.get("connection", {}), report.get("cleanup", {})
     pid = connection.get("process_id")
     checks = {"no_execution_error": not report.get("error"),
+              "runtime_diagnostics": report.get("runtime_diagnostics", {}).get("status") == "pass"
+              and report.get("runtime_diagnostics", {}).get("blocked_reasons") == []
+              and all(report.get("runtime_diagnostics", {}).get("checks", {}).get(k) is True
+                      for k in ("windows", "python_64_bit", "pythoncom", "win32com", "comtypes")),
               "real_2026_owned_instance": report.get("backend") == "real-solidworks-2026" and report.get("mock") is False
               and report.get("version", {}).get("year") == 2026 and connection.get("actual_version") == 2026
               and connection.get("requested_version") == 2026 and connection.get("started_by_cad_studio") is True
-              and type(pid) is int and pid > 0 and report.get("processes_before") == {},
+              and valid_process_identity(pid, report.get("process_created_at")) and report.get("processes_before") == {},
               "safe_cleanup": cleanup.get("status") == "pass" and cleanup.get("owned_pid") == pid
               and cleanup.get("remaining_documents") == 0 and cleanup.get("exit_requested") is True
               and cleanup.get("processes_after") == {} and cleanup.get("errors") == []}
@@ -180,11 +187,14 @@ def adapt_terminal(report, output, spec):
     raw = {"success": succeeded, "status": "ok" if succeeded else "blocked" if "BLOCKED:" in report.get("error", "") else "failed",
            "manual_review_required": evaluation.get("manual_review_required", True),
            "message": "真实 CAD 流程结束后的终态适配"}
+    if raw["status"] == "blocked":
+        # Core 会将 success=False 归为明确工具失败；前置未执行只传 BLOCKED，不伪称成功或失败。
+        raw.pop("success")
     # evaluation.issues 是通用审查说明，而非 Verification 的带 status 检查；原文留在 report。
     reviewer = {"status": evaluation.get("status"), "manual_review_required": evaluation.get("manual_review_required", True),
                 "reason": evaluation.get("manual_review_reason"),
                 "evidence": [{"path": report.get("review_path"), "scope": "original_review"}]}
-    assessment = execute_with_core(handler=lambda _: raw, run_id=output.name, tool_name="golden_terminal_adapter",
+    assessment = execute_with_core(handler=lambda _: raw, run_id=report.get("trace_run_id", output.name), tool_name="golden_terminal_adapter",
                                    capability_id="part_and_features", requires_review=True, reviewer_result=reviewer,
                                    trace_dir=output / "trace")
     core = assessment.to_dict()
@@ -226,36 +236,43 @@ def acceptance_result(report, spec, expected_terminal, integrity):
 
 def required_evidence(run_id):
     """@brief 固定必需交付物集合，不能按当前碰巧存在的文件减少验收要求。"""
-    return {"mounting_bracket.SLDPRT", "mounting_bracket.step", "built.json", "reopened.json", "step_reopened.json",
-            "preflight.log", "doctor.log", "run.log", "report.json", f"trace/events/{run_id}.jsonl",
-            "review/mounting_bracket_review_report.json", "review/mounting_bracket_review_summary.md",
-            *(f"review/mounting_bracket_{view}.bmp" for view in VIEWS)}
+    return evidence_paths("mounting_bracket", run_id)
 
 
 def inspect_evidence(output, report):
     """@brief 回读文件、哈希和 Ledger，校验覆盖集合、来源及报告关联；未知即失败。"""
     errors = []
     try:
+        safe_output_path(output, output)
         output = output.resolve()
-        load = lambda p: json.loads(p.read_text(encoding="utf-8"))
+        load = lambda p: json.loads(safe_output_path(output, p).read_text(encoding="utf-8"))
         manifest = load(output / "sha256.json")
         entries = {}
         for entry in manifest:
             path = output / entry["path"]
             if Path(entry["path"]).is_absolute() or not path.resolve().is_relative_to(output):
                 raise ValueError("HASH_PATH_OUTSIDE_RUN")
+            safe_output_path(output, path)
             key = path.relative_to(output).as_posix()
             if key in entries or not path.is_file() or path.stat().st_size <= 0:
                 raise ValueError(f"MISSING_DUPLICATE_OR_EMPTY_ARTIFACT: {key}")
             if entry["size_bytes"] != path.stat().st_size or entry["sha256"] != sha256_file(path):
                 raise ValueError(f"ARTIFACT_HASH_MISMATCH: {key}")
             entries[key] = entry
-        actual = {p.relative_to(output).as_posix() for p in output.rglob("*") if p.is_file() and p.name != "sha256.json"}
+        actual = set()
+        for path in output.rglob("*"):
+            safe_output_path(output, path)
+            if path.is_file() and path != output / "sha256.json":
+                actual.add(path.relative_to(output).as_posix())
         ledger_key = f"ledgers/{output.name}.ledger.json"
-        if set(entries) != actual or not (required_evidence(output.name) | {ledger_key}).issubset(entries):
+        trace_run_id = report.get("trace_run_id", output.name)
+        if set(entries) != actual or not (required_evidence(trace_run_id) | {ledger_key}).issubset(entries):
             raise ValueError("EVIDENCE_COVERAGE_INCOMPLETE")
         if load(output / "report.json") != report:
             raise ValueError("REPORT_CONTENT_MISMATCH")
+        for name in ("runtime_config", "runtime_diagnostics"):
+            if load(output / f"{name}.json") != report.get(name):
+                raise ValueError("RUNTIME_DIAGNOSTIC_MISMATCH")
         for stage in ("built", "reopened", "step_reopened"):
             if load(output / f"{stage}.json") != report.get(stage):
                 raise ValueError(f"SNAPSHOT_CONTENT_MISMATCH: {stage}")
@@ -264,7 +281,7 @@ def inspect_evidence(output, report):
             raise ValueError("REVIEW_CONTENT_MISMATCH")
         ledger = load(output / ledger_key)
         if (ledger["executor"] != "solidworks-com-pywin32" or ledger["status"] != report["task_status"]
-                or ledger["runId"] != output.name or ledger["jobId"] != output.name
+                or ledger["runId"] != trace_run_id or ledger["jobId"] != output.name
                 or ledger["verification"] != [report["execution_core"]]):
             raise ValueError("LEDGER_PROVENANCE_MISMATCH")
         ledger_paths = set()
@@ -279,24 +296,24 @@ def inspect_evidence(output, report):
         if ledger_paths != set(entries) - {ledger_key}:
             raise ValueError("LEDGER_COVERAGE_INCOMPLETE")
         # 追踪文件来自真实 Core 适配，须有验证及准确终态，不能把工具失败冒充人工阻塞。
-        events = [json.loads(line) for line in (output / "trace" / "events" / f"{output.name}.jsonl").read_text(encoding="utf-8").splitlines()]
-        types = [item["type"] for item in events]
-        if (report.get("blocking_reasons") == [MANUAL_REVIEW_BLOCK]
-                and ("tool.failed" in types or "tool.succeeded" not in types or "verification.passed" not in types)):
-            raise ValueError("CORE_TRACE_SEMANTICS_MISMATCH")
-        if types[-1] != "run." + report["task_status"] or ("run.completed" in types and report["task_status"] != "completed"):
-            raise ValueError("CORE_TRACE_TERMINAL_MISMATCH")
-    except (OSError, ValueError, KeyError, TypeError, IndexError) as error:
+        events = [json.loads(line) for line in (output / "trace" / "events" / f"{trace_run_id}.jsonl").read_text(encoding="utf-8").splitlines()]
+        validate_core_trace(events, report, trace_run_id)
+    except (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError) as error:
         errors.append(f"{type(error).__name__}: {error}")
     return {"status": "pass" if not errors else "fail", "errors": errors}
 
 
 def write_evidence_bundle(output, report):
     """@brief 封存本轮报告、Ledger 与清单；排除 Ledger/清单自引用。"""
-    write_json(output / "report.json", report)
+    for path in output.rglob("*"):
+        safe_output_path(output, path)
+    safe_output_path(output, output / "report.json")
+    safe_output_path(output, output / "sha256.json")
     ledger_path = output / "ledgers" / f"{output.name}.ledger.json"
+    safe_output_path(output, ledger_path)
+    write_json(output / "report.json", report)
     files = [p for p in output.rglob("*") if p.is_file() and p not in {output / "sha256.json", ledger_path}]
-    write_artifact_ledger(output, {"id": output.name, "runId": output.name, "executor": "solidworks-com-pywin32",
+    write_artifact_ledger(output, {"id": output.name, "runId": report.get("trace_run_id", output.name), "executor": "solidworks-com-pywin32",
                                   "status": report["task_status"], "cwd": str(output)},
                           {"artifacts": [{"kind": p.suffix.lstrip("."), "path": str(p)} for p in files],
                            "artifactBaseline": {}, "verification": [report["execution_core"]]})
@@ -361,7 +378,7 @@ def snapshot_model(model, boss_name=None):
 def run_cad(output, report, spec):
     """@brief 仅在进程状态可证明为空时启动真机；清理只依据实际文档所有权。"""
     import pythoncom
-    from scripts.sw_connect import (connect_solidworks, get_com_member as member, get_sw_version,
+    from scripts.sw_connect import (connect_solidworks, get_com_member as member, get_sw_version, find_template,
                                     new_document, save_document, open_document, close_owned_solidworks)
     from scripts.sw_part import sketch, sketch_rectangle, sketch_circle, extrude_boss, extrude_cut, clear_sketch_selection_cache
     from scripts.sw_sketch_quality import fully_define_sketch
@@ -374,15 +391,22 @@ def run_cad(output, report, spec):
         raise RuntimeError("BLOCKED: SolidWorks 进程状态不为空或不可知；保留已有进程及文档")
     sw, model, pid, owned = None, None, None, False
     owned_titles = set()
+    runtime = report["runtime_config"]
     pythoncom.CoInitialize()
     try:
-        sw, _, connection = connect_solidworks(version=2026, visible=True, wait_seconds=60, return_metadata=True)
+        sw, _, connection = connect_solidworks(version=CASE_REGISTRY["mounting_bracket"]["year"], visible=True,
+                                               wait_seconds=runtime["connect_timeout_seconds"], return_metadata=True)
         report.update(connection=connection, version=get_sw_version(sw))
         pid = int(member(sw, "GetProcessID"))
         owned = connection["started_by_cad_studio"] is True and pid not in prior
+        report["process_created_at"] = process_created_at(pid)
         if not owned or report["version"]["year"] != 2026 or list(member(sw, "GetDocuments") or []):
             raise RuntimeError("BLOCKED: 无法证明新建空白 SolidWorks 2026 实例的所有权")
-        model = new_document(sw, "part")
+        template = runtime["part_template"] or find_template(sw, "part")
+        if not template or not Path(template).is_file():
+            raise RuntimeError("BLOCKED: 未找到可用零件模板")
+        report["resolved_part_template"] = {"path": str(template), "sha256": sha256_file(Path(template))}
+        model = new_document(sw, "part", template_path=str(template))
         owned_titles.add(str(member(model, "GetTitle")))
         with sketch(model, "Front Plane") as ref:
             sketch_rectangle(model, 0, 0, spec["size_mm"][0] / 1000, spec["size_mm"][1] / 1000)
@@ -399,18 +423,17 @@ def run_cad(output, report, spec):
         if extrude_cut(model, ref, 0, direction=True) is None:
             raise RuntimeError("贯穿孔切除失败")
         # 使用已安装的原厂材料库，禁止把自定义字符串当作实际材料分配。
-        install = Path(report["doctor"]["installations"]["solidworks"]["executable"]).parent
-        database = install / "lang" / "english" / "sldmaterials" / "solidworks materials.sldmat"
-        if not database.is_file():
-            raise RuntimeError("BLOCKED: 未找到原厂材料数据库")
+        database = resolve_material_database(runtime, report["doctor"]["installations"]["solidworks"]["executable"])
         # 原厂库使用带 (SS) 后缀的精确条目名；不创建或篡改材料库。
         import xml.etree.ElementTree as ET
-        material = next((item for item in ET.parse(database).iter("material") if item.get("name") == "6061-T6 (SS)"), None)
+        entry_name = spec.get("material_library_entry", "6061-T6 (SS)")
+        material = next((item for item in ET.parse(database).iter("material") if item.get("name") == entry_name), None)
         if material is None:
             raise RuntimeError("BLOCKED: 原厂库未提供 6061-T6 (SS)")
         report["material_library_entry"] = {"requested": spec["material"], "name": material.get("name"), "matid": material.get("matid")}
         member(model, "SetMaterialPropertyName2", "", str(database), material.get("name"))
         report["material_database_sha256"] = sha256_file(database)
+        report["resolved_material_database"] = str(database)
         for stage in ("built", "reopened"):
             if not member(model, "ForceRebuild3", False):
                 raise RuntimeError(f"{stage} 重建失败")
@@ -470,7 +493,7 @@ def run_cad(output, report, spec):
         clear_sketch_selection_cache()
         gc.collect()
         pythoncom.CoUninitialize()
-        deadline = time.monotonic() + 30
+        deadline = time.monotonic() + runtime["cleanup_timeout_seconds"]
         while pid and time.monotonic() < deadline:
             current = solidworks_processes()
             if current is None or pid not in current:
@@ -495,22 +518,34 @@ def finalize_report(output, report, spec, expected_terminal):
         report.update(acceptance_status="failed", evidence_integrity={"status": "fail", "errors": [traceback.format_exc()]})
         if "acceptance" in report:
             report["acceptance"]["acceptance_status"] = "failed"
-        write_json(output / "report.json", report)
+        # report.json 若被链接替换，错误处理也不能覆盖外部文件。
+        try:
+            write_json(safe_output_path(output, output / "report.json"), report)
+        except ValueError:
+            write_json(safe_output_path(output, output / "finalization_error.json"), report)
     return report
 
 
-def run_once(output, expected_terminal="completed"):
+def run_once(output, expected_terminal="completed", runtime_config=None):
     """@brief 保存所有失败、日志、Execution Core、Artifact Ledger 与文件 SHA-256。"""
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     workflow, spec = load_case()
-    report = {"schema_version": "1.1", "backend": "real-solidworks-2026", "mock": False,
+    report = {"schema_version": "1.2", "backend": "real-solidworks-2026", "mock": False,
               "status": "failed", "task_status": "failed", "acceptance_status": "failed",
               "expected_terminal": expected_terminal, "workflow": workflow, "expected_volume_mm3": expected_volume(spec),
-              "generated_at": datetime.now(timezone.utc).isoformat(), "output_dir": str(output),
-              "source_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()}
+              "trace_run_id": "golden_" + uuid.uuid4().hex,
+              "generated_at": datetime.now(timezone.utc).isoformat(), "output_dir": str(output)}
     with (output / "run.log").open("w", encoding="utf-8", buffering=1) as log, redirect_stdout(log), redirect_stderr(log):
         try:
+            report["source_sha"] = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+            try:
+                report["runtime_config"] = load_runtime_config(runtime_config)
+            except (OSError, ValueError, TypeError) as error:
+                raise RuntimeError(f"BLOCKED: 运行配置不可用: {error}") from error
+            report["runtime_diagnostics"] = diagnose_runtime(report["runtime_config"])
+            if report["runtime_diagnostics"]["status"] != "pass":
+                raise RuntimeError("BLOCKED: 运行时诊断不通过")
             for command, name in ((["scripts/sw_preflight.py"], "preflight"), (["scripts/cad_studio.py", "doctor"], "doctor")):
                 result = subprocess.run([sys.executable, "-X", "utf8", *command], cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
                 (output / f"{name}.log").write_text(result.stdout + result.stderr, encoding="utf-8")
@@ -522,6 +557,10 @@ def run_once(output, expected_terminal="completed"):
         except Exception:
             report["error"] = traceback.format_exc()
             print(report["error"], flush=True)
+        report.setdefault("runtime_config", {})
+        report.setdefault("runtime_diagnostics", {"status": "blocked", "blocked_reasons": [report.get("error", "unknown")]})
+        write_json(output / "runtime_config.json", report["runtime_config"])
+        write_json(output / "runtime_diagnostics.json", report["runtime_diagnostics"])
         adapt_terminal(report, output, spec)
         print(json.dumps({"task_status": report["task_status"], "core_scope": report["core_scope"],
                           "blocking_reasons": report["blocking_reasons"], "cleanup": report.get("cleanup")}, ensure_ascii=False), flush=True)
@@ -545,8 +584,11 @@ def summarize_runs(reports, spec, expected_terminal):
                      "failed_checks": result["failed_checks"], "evidence_integrity": integrity,
                      "report": str(Path(report["output_dir"]) / "report.json")})
     pids = [report.get("connection", {}).get("process_id") for report in reports]
+    identities = [(pid, report.get("process_created_at")) for pid, report in zip(pids, reports)]
+    trace_ids = [report.get("execution_core", {}).get("run_id") for report in reports]
     suite_checks = {"runs_present": bool(reports), "all_runs_accepted": all(row["acceptance_status"] == "passed" for row in rows),
-                    "independent_processes": len(set(pids)) == len(pids) and all(type(pid) is int and pid > 0 for pid in pids),
+                    "independent_trace_runs": len(set(trace_ids)) == len(trace_ids),
+                    "independent_processes": len(set(identities)) == len(identities) and all(type(pid) is int and pid > 0 for pid in pids),
                     "five_runs_for_expected_block": expected_terminal != "blocked" or len(reports) == 5}
     tasks = [row["task_status"] for row in rows]
     task = "failed" if any(t not in {"completed", "blocked"} for t in tasks) or not tasks else "blocked" if "blocked" in tasks else "completed"
@@ -556,7 +598,7 @@ def summarize_runs(reports, spec, expected_terminal):
                                  or row["evidence_integrity"]["status"] != "pass"
                                  or r.get("execution_core", {}).get("status") != r.get("task_status"))
                             for r, c, row in zip(reports, workflow, rows))
-    return {"schema_version": "1.1", "backend": "real-solidworks-2026", "mock": False, "status": task, "task_status": task,
+    return {"schema_version": "1.2", "backend": "real-solidworks-2026", "mock": False, "status": task, "task_status": task,
             "acceptance_status": "passed" if all(suite_checks.values()) else "failed", "expected_terminal": expected_terminal,
             "suite_checks": suite_checks, "runs": rows,
             "metrics": {"run_count": len(reports), "geometry_success_count": sum(all(c[k] for k in geometry_keys) for c in workflow),
@@ -573,11 +615,12 @@ def main(argv=None):
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--runs", type=int, choices=range(1, 6), default=1)
     parser.add_argument("--expected-terminal", choices=("completed", "blocked"), default="completed")
+    parser.add_argument("--runtime-config", type=Path, help="仅配置模板/材料库和有界超时的 JSON 文件")
     args = parser.parse_args(argv)
     if args.expected_terminal == "blocked" and args.runs != 5:
         parser.error("--expected-terminal blocked 必须结合 --runs 5")
     args.output.mkdir(parents=True, exist_ok=False)
-    reports = [run_once(args.output / f"run-{i:02d}", args.expected_terminal) for i in range(1, args.runs + 1)]
+    reports = [run_once(args.output / f"run-{i:02d}", args.expected_terminal, args.runtime_config) for i in range(1, args.runs + 1)]
     summary = summarize_runs(reports, load_case()[1], args.expected_terminal)
     write_json(args.output / "summary.json", summary)
     print(json.dumps(summary, ensure_ascii=False, indent=2), flush=True)

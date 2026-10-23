@@ -67,6 +67,9 @@ def complete_report(output, pid=12345, manual=True):
     """@brief 合成契约输入；这些记录不来自 CAD，绝不计入真机运行统计。"""
     quality = {"status": "pass", "constrained_status": 3, "fix_count": 0, "dimension_count": 2, "errors": []}
     report = {"backend": "real-solidworks-2026", "mock": False, "version": {"year": 2026},
+              "runtime_config": {}, "runtime_diagnostics": {"status": "pass", "blocked_reasons": [],
+              "checks": dict.fromkeys(("windows", "python_64_bit", "pythoncom", "win32com", "comtypes"), True)},
+              "process_created_at": "2026-10-23T00:00:00+00:00",
               "connection": {"requested_version": 2026, "actual_version": 2026, "process_id": pid, "started_by_cad_studio": True},
               "processes_before": {}, "cleanup": {"status": "pass", "owned_pid": pid, "remaining_documents": 0,
                                                     "exit_requested": True, "processes_after": {}, "errors": []},
@@ -140,13 +143,15 @@ def make_evidence(output, pid=12345, mutation=None, manual=True):
         mutation(report)
     golden.adapt_terminal(report, output, load_case()[1])
     # 占位字节只用于完整性故障注入，不是 CAD/图像，不在真机统计中出现。
-    for name in golden.required_evidence(output.name):
+    for name in golden.required_evidence(report.get("trace_run_id", output.name)):
         path = output / name
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
             path.write_bytes(b"OFFLINE CONTRACT FIXTURE\n" * 100)
     for stage in ("built", "reopened", "step_reopened"):
         golden.write_json(output / f"{stage}.json", report[stage])
+    for name in ("runtime_config", "runtime_diagnostics"):
+        golden.write_json(output / f"{name}.json", report[name])
     golden.write_json(output / "review" / "mounting_bracket_review_report.json", report["review"])
     return golden.finalize_report(output, report, load_case()[1], "blocked")
 

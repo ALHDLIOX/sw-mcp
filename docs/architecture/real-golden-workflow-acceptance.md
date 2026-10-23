@@ -63,6 +63,10 @@ STEP 回读验证交付几何，不要求保留原生草图或材料。COM 若�
 
 ## CI 边界
 
+**当前 P0-1.2 机制已替代下述历史白名单**：受保护分支手动触发、托管机 API 准入、
+Environment 人工审批和专用 Runner。配置缺失仍 BLOCKED，见
+[合并前检查报告](real-golden-merge-readiness.md)。以下保留 P0-1.1 当时的限制及结果。
+
 复用 `windows-cad-regression.yml`，只有仓库内指定
 `test/p0-real-golden-mounting-bracket-2026` 分支的 `workflow_dispatch`
 可访问自托管 CAD Runner。没有 PR/pull_request_target 触发，checkout 使用
