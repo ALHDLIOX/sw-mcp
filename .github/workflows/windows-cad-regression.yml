@@ -10,6 +10,16 @@ on:
 
 jobs:
   cad-regression:
+    # 真机只接受仓库内受控分支的手动触发；不接收 pull_request/外部代码。
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'wzyn20051216/solidworks-automation-skill' &&
+      github.ref == 'refs/heads/test/p0-real-golden-mounting-bracket-2026'
+    permissions:
+      contents: read
+    concurrency:
+      group: controlled-windows-cad
+      cancel-in-progress: false
     # 需要预装 SolidWorks/AutoCAD 的 Windows 自托管测试机。
     runs-on: [self-hosted, Windows, CAD]
     timeout-minutes: 45
@@ -38,6 +48,11 @@ jobs:
           CAD_STUDIO_VISIBLE: "false"
       - name: AutoCAD backend preflight
         run: python subskills/autocad-automation/scripts/acad_dotnet_preflight.py
+      - name: Golden acceptance offline contracts
+        run: python -m pytest tests/test_solidworks_golden_mounting_bracket_2026.py tests/test_core_execution.py tests/test_eval_runner.py -q
+      - name: SolidWorks 2026 Golden mounting bracket (five independent runs)
+        shell: pwsh
+        run: python tests/solidworks_golden_mounting_bracket_2026.py --output "output/p0-golden-${{ github.run_id }}-${{ github.run_attempt }}" --runs 5
       - name: Upload CAD regression evidence
         if: always()
         uses: actions/upload-artifact@v7
