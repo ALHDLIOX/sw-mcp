@@ -12,7 +12,7 @@
 deterministic eval；后者使用夹具，不能证明 CAD 能力。
 
 ```powershell
-python -m pytest tests/test_solidworks_golden_mounting_bracket_2026.py tests/test_core_execution.py tests/test_eval_runner.py -q
+python -X utf8 -m pytest -q -rs
 python tests/evals/runner.py --output-dir output/p0-offline-eval
 python tests/solidworks_golden_mounting_bracket_2026.py --output output/p0-golden-unique --runs 5
 # P0-1.1：显式验收五轮正确人工门禁；业务任务仍然 blocked。
@@ -170,3 +170,62 @@ output/p0-evidence-20261023.zip         # 全部报告、日志、CAD、预览�
 原生/STEP 二进制与 BMP 不提交到 Git；可审查的
 [结构化索引](evidence/p0-real-golden-2026-10-23.json)包含每轮报告和清单的 SHA-256。
 [Draft PR #39](https://github.com/wzyn20051216/solidworks-automation-skill/pull/39)。
+
+## 2026-10-23 P0-1.1 实际复测结果
+
+本阶段起点为 `13e22ca5244b808d04fde2a51346c800aa8a52d1`；执行代码 SHA 为
+`6e8903cdea3cdf36b0e4fe15e55779cdc663ac39`。生产 Review / Verification / Execution
+Core 均未修改，历史 P0-1 报告和失败证据保持原样。
+
+全部离线回归 **942 passed / 1 skipped**（66.42 s）；跳过原因为桌面内嵌 Skill
+尚未生成，另附 UTF-8 日志说明。deterministic mock eval 37 场景预期结果正确，
+escaped false completion 为 0。这些是离线契约验证，不能代替下列真机结果。
+新增故障注入覆盖错误孔径/孔位、STEP 孔径、材料/草图、Review FAIL/WARN/未知、
+人工标志缺失、清理失败、遗留文档/进程、用户实例归属、许可证阻塞、缺产物、
+哈希/账本不全、错误终态、错误人工标记、重复 PID、不足五轮和最终封存失败。
+CLI 契约测试确认只有正常预期阻塞返回 0，关键注入故障均非零，默认完成模式仍非零。
+
+真实命令（输出目录原先不存在）如下；退出码 **0**：
+
+```powershell
+python -X utf8 tests/solidworks_golden_mounting_bracket_2026.py --output output/p0-11-real-five-01 --runs 5 --expected-terminal blocked
+```
+
+| 轮次 | 独立 PID | 几何/交付/证据/清理 | task_status | acceptance_status | 人工复核 |
+| --- | --- | --- | --- | --- | --- |
+| 01 | 39596 | PASS | blocked | passed | true |
+| 02 | 46956 | PASS | blocked | passed | true |
+| 03 | 41440 | PASS | blocked | passed | true |
+| 04 | 22712 | PASS | blocked | passed | true |
+| 05 | 20972 | PASS | blocked | passed | true |
+
+五轮真实几何成功率 **5/5（100%）**；预期门禁正确率 **5/5（100%）**；
+Task Completion **0**；Test Acceptance **5**；False Completion **0**；
+安全清理 **5/5（100%）**。五轮均为 SolidWorks 2026 revision 34.1.1，
+原生件重开和 STEP 回读体积均为 94460.6196 mm³。五轮实际 trace 均含
+`tool.succeeded → verification.passed → run.blocked`，Verification=PASS，
+manual_review_required=true，Recovery=user_action_required，且无 tool.failed / run.completed。
+每轮均只有 `EXPECTED_MANUAL_REVIEW_REQUIRED`，原始 Review 规则为 PASS / 100 分。
+
+套件结束和交付前均重新读取全部证据，85 项文件 SHA-256 及 Artifact Ledger
+复核通过，进程快照为空且残留文档为 0。以相同真实证据运行严格 completed 门禁
+复核得到 acceptance_status=failed、task_status=blocked，未改变原始真实运行记录。
+本阶段没有真机失败轮次；所有故障注入均在离线临时目录，不改真实 CAD 或原始证据。
+
+```text
+output/p0-11-real-five-01/summary.json
+output/p0-11-real-five-01/run-01 ... run-05/
+output/p0-11-real-console.log
+output/p0-11-real-exitcode.txt
+output/p0-11-offline/pytest-full.log
+output/p0-11-offline/eval/eval_report.json
+output/p0-11-offline/real-evidence-strict-control.json
+output/p0-11-evidence-sha256.json
+output/p0-11-evidence-20261023.zip
+```
+
+完整证据包 SHA-256：
+`bc8c055c7ce314f3d148a43ce3d7dbd5ff8b9ef3a4c6519ddd3a234dd26a01c0`。
+[P0-1.1 结构化索引](evidence/p0-11-real-golden-2026-10-23.json)记录每轮报告与清单哈希。
+本次完成的是**测试状态分层和预期门禁验收**；未启用无人复核策略，未验证 Core
+逐步调度真实 CAD，未运行远程自托管 CAD Runner。硬编码分支的合并维护限制见上文。
