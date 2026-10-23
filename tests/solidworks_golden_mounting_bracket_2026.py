@@ -55,6 +55,30 @@ def close_enough(actual, expected, tolerance):
     return isinstance(actual, (int, float)) and math.isfinite(actual) and abs(actual - expected) <= tolerance
 
 
+def step_boundary_groups(snapshot):
+    """@brief 按同轴圆柱面面积与圆弧真实长度归并 STEP 接缝；不改写原始测量。
+
+    @details SW 的 STEP 导入可把一个圆柱壁/圆边拆成两半；必须证明合计完整圆周。
+    """
+    groups = {}
+    for face in snapshot["geometry"].get("cylindrical_faces", []):
+        if not face["internal"]:
+            continue
+        key = tuple(round(v, 5) for v in [face["diameter_mm"], *face["origin_mm"][:2], *map(abs, face["axis"])])
+        hole = groups.setdefault(key, {"diameter_mm": face["diameter_mm"], "position_mm": face["origin_mm"],
+                                       "axis": face["axis"], "area_mm2": 0.0})
+        hole["area_mm2"] += face["area_mm2"]
+    for hole in groups.values():
+        hole["axial_length_mm"] = hole["area_mm2"] / (math.pi * hole["diameter_mm"])
+    circles = {}
+    for edge in snapshot["circular_edges"]:
+        key = tuple(round(v, 5) for v in edge[:4])
+        circle = circles.setdefault(key, [*edge[:4], True, 0.0])
+        circle[4] &= edge[4]
+        circle[5] += edge[5]
+    return list(groups.values()), list(circles.values())
+
+
 def validate_snapshot(snapshot, spec, native=True):
     """@brief 独立核对 B-Rep、解析质量与原生特征证据；不依赖创建 API success。"""
     tol = spec["length_tolerance_mm"]
@@ -69,6 +93,9 @@ def validate_snapshot(snapshot, spec, native=True):
     checks["brep_plate_boundaries"] = len(planes) == 6 and all(
         any(p["axis"] == axis and close_enough(p["coordinate_mm"], value, tol) for p in planes) for axis, value in targets)
     holes = snapshot["geometry"].get("holes") or []
+    circular_edges = snapshot["circular_edges"]
+    if not native:
+        holes, circular_edges = step_boundary_groups(snapshot)
     checks["four_holes"] = len(holes) == 4
     matched = set()
     for i, (x, y) in enumerate(spec["hole_centers_mm"]):
@@ -82,11 +109,12 @@ def validate_snapshot(snapshot, spec, native=True):
         if len(candidates) == 1:
             matched.add(candidates[0][0])
         # 同一孔的两个圆边须分别邻接 z=0 和 z=10 板面，排除盲孔、内部空腔。
-        edges = [e for e in snapshot["circular_edges"] if close_enough(e[0], x, tol)
+        edges = [e for e in circular_edges if close_enough(e[0], x, tol)
                  and close_enough(e[1], y, tol) and close_enough(e[3], 3.5, tol)]
         checks[f"hole_{i + 1}_through_boundaries"] = len(edges) == 2 and all(
             any(close_enough(e[2], z, tol) and e[4] for e in edges) for z in (0, 10))
-    checks["eight_circular_edges"] = len(snapshot["circular_edges"]) == 8
+        checks[f"hole_{i + 1}_full_circumferences"] = len(edges) == 2 and all(close_enough(e[5], math.pi * 7, tol) for e in edges)
+    checks["eight_circular_boundaries"] = len(circular_edges) == 8
     if native:
         summary = snapshot["features"]
         checks["healthy_features"] = not any(summary.get(k) for k in ("feature_error", "faulty_features", "warning_features", "unknown_feature_health"))
@@ -146,7 +174,9 @@ def snapshot_model(model, boss_name=None):
                 if member(surface, "IsPlane"):
                     plane = list(member(surface, "PlaneParams"))
                     at_plate |= close_enough(abs(plane[2]), 1, 1e-6) and close_enough(plane[5] * 1000, p[2] * 1000, .01)
-            edges.append([p[0] * 1000, p[1] * 1000, p[2] * 1000, p[6] * 1000, at_plate])
+            trim = member(edge, "GetCurveParams3")
+            length = float(member(curve, "GetLength3", member(trim, "UMinValue"), member(trim, "UMaxValue"))) * 1000
+            edges.append([p[0] * 1000, p[1] * 1000, p[2] * 1000, p[6] * 1000, at_plate, length])
     result = {"body_count": len(bodies), "planes": planes, "circular_edges": edges,
               "geometry": collect_geometry_measurements(model), "mass": collect_mass_properties(model)}
     if boss_name is not None:
@@ -225,6 +255,7 @@ def run_cad(output, report, spec):
             evidence = snapshot_model(model, boss_name)
             evidence["validation"] = validate_snapshot(evidence, spec)
             report[stage] = evidence
+            print(f"{stage}: {evidence['validation']['status']}; volume={evidence['mass']['volume_mm3']}", flush=True)
             write_json(output / f"{stage}.json", evidence)
             if evidence["validation"]["status"] != "pass":
                 raise RuntimeError(f"{stage} 几何验收失败: {evidence['validation']['failed_checks']}")
@@ -348,7 +379,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     reports = [run_once(args.output / f"run-{i:02d}") for i in range(1, args.runs + 1)]
     summary = {"backend": "real-solidworks-2026", "mock": False,
-               "status": "completed" if all(r["status"] == "completed" for r in reports) else "blocked" if any(r["status"] == "blocked" for r in reports) else "failed",
+               "status": "completed" if all(r["status"] == "completed" for r in reports) else "failed" if any(r["status"] == "failed" for r in reports) else "blocked",
                "runs": [{"status": r["status"], "report": str(Path(r["output_dir"]) / "report.json")} for r in reports]}
     write_json(args.output / "summary.json", summary)
     return 0 if summary["status"] == "completed" else 1

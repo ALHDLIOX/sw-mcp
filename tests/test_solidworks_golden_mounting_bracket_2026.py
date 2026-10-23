@@ -18,7 +18,7 @@ def valid_measurements():
     return {"body_count": 1, "geometry": {"envelope_mm": {"length": 120, "width": 80, "height": 10}, "holes": holes},
             "mass": {"volume_mm3": expected_volume(spec), "density_kg_m3": 2700},
             "planes": [{"axis": a, "coordinate_mm": v} for a, v in ((0, -60), (0, 60), (1, -40), (1, 40), (2, 0), (2, 10))],
-            "circular_edges": [[x, y, z, 3.5, True] for x, y in spec["hole_centers_mm"] for z in (0, 10)],
+            "circular_edges": [[x, y, z, 3.5, True, math.pi * 7] for x, y in spec["hole_centers_mm"] for z in (0, 10)],
             "features": {"features": [{"type": "Boss"}, {"type": "Cut"}]},
             "sketch_quality": {"status": "pass", "sketches": [{}, {}]},
             "material": {"name": "6061-T6 (SS)", "database": "fixture.sldmat"}, "thickness_mm": 10}
@@ -95,3 +95,20 @@ def test_instant3d_underlying_type_must_be_read():
     assert validate_snapshot(snapshot, load_case()[1])["status"] == "pass"
     snapshot["features"]["features"][1].pop("underlying_type")
     assert validate_snapshot(snapshot, load_case()[1])["status"] == "fail"
+
+
+def test_step_split_faces_require_full_area_and_full_circles():
+    """@brief STEP 半圆接缝不得被误判为槽；缺面或缺弧仍不能通过。"""
+    snapshot = valid_measurements()
+    snapshot["geometry"]["holes"] = []
+    snapshot["geometry"]["cylindrical_faces"] = [
+        {"diameter_mm": 7, "origin_mm": [x, y, 10], "axis": [0, 0, -1],
+         "internal": True, "area_mm2": math.pi * 7 * 10 / 2}
+        for x, y in load_case()[1]["hole_centers_mm"] for _ in range(2)]
+    snapshot["circular_edges"] = [[*edge[:5], edge[5] / 2] for edge in snapshot["circular_edges"] for _ in range(2)]
+    assert validate_snapshot(snapshot, load_case()[1], native=False)["status"] == "pass"
+    broken = deepcopy(snapshot)
+    broken["geometry"]["cylindrical_faces"].pop()
+    assert validate_snapshot(broken, load_case()[1], native=False)["status"] == "fail"
+    snapshot["circular_edges"].pop()
+    assert validate_snapshot(snapshot, load_case()[1], native=False)["status"] == "fail"
