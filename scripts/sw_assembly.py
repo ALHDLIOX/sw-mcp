@@ -9,10 +9,10 @@ import os
 
 try:
     from .sw_preflight import import_com_dependencies
-    from .sw_connect import open_document, safe_get_com_member
+    from .sw_connect import open_document, safe_get_com_member, get_com_member
 except ImportError:
     from sw_preflight import import_com_dependencies
-    from sw_connect import open_document, safe_get_com_member
+    from sw_connect import open_document, safe_get_com_member, get_com_member
 
 pythoncom, _win32com, VARIANT = import_com_dependencies()
 
@@ -599,6 +599,77 @@ def collect_mate_feature_summary(model):
                 "type": type_name,
                 "depth": depth,
             })
+    return result
+
+
+def inspect_component_dofs(component):
+    """@brief 回读 SW SDK 的 GetRemainingDOFs；保留原始状态和方向，不猜测未知值。
+
+    @details 签名由 SW2026 原厂 Interop IComponent2 反射核对：12 个 out 参数，
+    6 组 status/MathPoint 或 MathVector，返回 Int32。状态按 swDofStatus_e 记录。
+    此接口网页未完整公开，失败保持 blocked，不能用可视运动代替自由度证明。
+    """
+    result = {"status": "blocked", "source": "IComponent2.GetRemainingDOFs", "errors": []}
+    names = ("rotation_point_1", "rotation_axis_1", "rotation_point_2", "rotation_axis_2",
+             "translation_axis_1", "translation_axis_2")
+    arguments = []
+    for _ in names:
+        arguments.extend((VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0),
+                          VARIANT(pythoncom.VT_BYREF | pythoncom.VT_DISPATCH, None)))
+    try:
+        value = component.GetRemainingDOFs(*arguments)
+        values = [argument.value for argument in arguments]
+        if isinstance(value, (tuple, list)):
+            if len(value) != 13:
+                raise ValueError("GetRemainingDOFs 返回数组形状未知")
+            value, *values = value
+        result["count"] = int(value)
+        for index, name in enumerate(names):
+            state, vector = values[index * 2:index * 2 + 2]
+            result[name] = {"state": int(state), "vector": list(safe_get_com_member(vector, "ArrayData")) if vector is not None else None}
+        result["status"] = "pass"
+    except Exception as error:
+        result["errors"].append(str(error))
+    return result
+
+
+def inspect_native_mates(model):
+    """@brief 回读原生 Mate 特征、抑制/健康、关联组件与实体参数；未知保持 blocked。"""
+    try:
+        from .sw_review import _feature_health
+    except ImportError:
+        from sw_review import _feature_health
+    result = {"status": "blocked", "source": "MateGroup/IMate2/IMateEntity2", "mates": [], "errors": []}
+    seen = set()
+    try:
+        for feature, _ in iter_feature_tree(model):
+            kind = str(get_com_member(feature, "GetTypeName2"))
+            name = str(get_com_member(feature, "Name"))
+            if not kind.startswith("Mate") or kind == "MateGroup" or name in seen:
+                continue
+            seen.add(name)
+            mate = get_com_member(feature, "GetSpecificFeature2")
+            if mate is None:
+                raise RuntimeError("Mate2 返回空: " + name)
+            row = {"name": name, "feature_type": kind, "type": int(get_com_member(mate, "Type")),
+                   "suppressed": bool(get_com_member(feature, "IsSuppressed")),
+                   "health": _feature_health(feature), "entities": []}
+            for index in range(int(get_com_member(mate, "GetMateEntityCount"))):
+                entity = mate.MateEntity(index)
+                component = entity.ReferenceComponent
+                reference = entity.Reference
+                if component is None or reference is None:
+                    raise RuntimeError("Mate 引用缺失: " + name)
+                row["entities"].append({"component_id": int(get_com_member(component, "GetID")),
+                    "role": str(get_com_member(component, "ComponentReference")),
+                    "reference_type": int(entity.ReferenceType2), "entity_params": list(entity.EntityParams),
+                    "reference_present": True})
+            if row["type"] == SW_MATE_CONCENTRIC:
+                row["lock_rotation"] = bool(get_com_member(get_com_member(feature, "GetDefinition"), "LockRotation"))
+            result["mates"].append(row)
+        result["status"] = "pass"
+    except Exception as error:
+        result["errors"].append(str(error))
     return result
 
 

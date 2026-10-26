@@ -8,7 +8,10 @@ import struct
 from datetime import datetime
 
 CASE_REGISTRY = {"mounting_bracket": {"module": "solidworks_golden_mounting_bracket_2026",
-                                     "basename": "mounting_bracket", "year": 2026, "blocked_runs": 5}}
+                                     "basename": "mounting_bracket", "year": 2026, "blocked_runs": 5},
+                 "parallel_gripper_assembly": {"module": "solidworks_golden_parallel_gripper_2026",
+                     "basename": "parallel_gripper_assembly", "year": 2026, "blocked_runs": 5,
+                     "native_extension": "SLDASM"}}
 VIEWS = ("isometric", "front", "top", "right")
 
 
@@ -17,7 +20,8 @@ def evidence_paths(case_id, run_id):
     basename = CASE_REGISTRY[case_id]["basename"]
     if not run_id or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in run_id):
         raise ValueError("BLOCKED: run_id 必须只包含字母、数字、下划线和短横线")
-    return {f"{basename}.SLDPRT", f"{basename}.step", "built.json", "reopened.json", "step_reopened.json",
+    extension = CASE_REGISTRY[case_id].get("native_extension", "SLDPRT")
+    return {f"{basename}.{extension}", f"{basename}.step", "built.json", "reopened.json", "step_reopened.json",
             "runtime_config.json", "runtime_diagnostics.json", "preflight.log", "doctor.log", "run.log", "report.json",
             f"trace/events/{run_id}.jsonl", f"review/{basename}_review_report.json", f"review/{basename}_review_summary.md",
             *(f"review/{basename}_{view}.bmp" for view in VIEWS)}
@@ -48,23 +52,26 @@ def valid_process_identity(pid, created_at):
         return False
 
 
-def load_runtime_config(source=None):
+def load_runtime_config(source=None, case_id="mounting_bracket"):
     """@brief 只允许模板、材料库路径和有界超时；不能配置版本、容差或取消审查。"""
     config = {"part_template": None, "material_database": None, "connect_timeout_seconds": 60, "cleanup_timeout_seconds": 30}
+    if CASE_REGISTRY[case_id].get("native_extension") == "SLDASM":
+        config["assembly_template"] = None
     if source is not None:
         source = Path(source).resolve()
         value = json.loads(source.read_text(encoding="utf-8"))
         if not isinstance(value, dict) or set(value) - set(config):
             raise ValueError("BLOCKED: runtime-config 含未知或禁止的字段")
         config.update(value)
-        for key in ("part_template", "material_database"):
+        for key in ("part_template", "material_database", *(["assembly_template"] if "assembly_template" in config else [])):
             if config[key] is not None:
                 path = Path(config[key])
                 config[key] = str((source.parent / path).resolve() if not path.is_absolute() else path.resolve())
     for key, upper in (("connect_timeout_seconds", 120), ("cleanup_timeout_seconds", 60)):
         if type(config[key]) is not int or not 5 <= config[key] <= upper:
             raise ValueError(f"BLOCKED: {key} 必须为 5..{upper} 的整数")
-    for key, extension in (("part_template", ".prtdot"), ("material_database", ".sldmat")):
+    for key, extension in (("part_template", ".prtdot"), ("material_database", ".sldmat"),
+                           *(([("assembly_template", ".asmdot")]) if "assembly_template" in config else [])):
         if config[key] is not None and (not Path(config[key]).is_file() or Path(config[key]).suffix.lower() != extension):
             raise ValueError(f"BLOCKED: {key} 文件缺失或扩展名错误")
     return config
