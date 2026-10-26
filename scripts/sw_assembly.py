@@ -644,7 +644,12 @@ def create_math_transform(sw, values):
     values = tuple(float(v) for v in values)
     if len(values) != 16 or not all(math.isfinite(v) for v in values):
         raise ValueError("变换必须含 16 个有限值")
-    transform = get_com_member(sw, "GetMathUtility").CreateTransform(VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, values))
+    utility = get_com_member(sw, "GetMathUtility")
+    # pywin32 可把带参方法缓存成属性；本机最小探针确认需显式标记，禁止默认 DISPID 调用。
+    if hasattr(utility, "_FlagAsMethod"):
+        utility._FlagAsMethod("CreateTransform")
+    transform = get_com_member(utility, "CreateTransform",
+                               VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, values))
     if transform is None:
         raise RuntimeError("MathUtility.CreateTransform 返回空")
     actual = list(get_com_member(transform, "ArrayData"))

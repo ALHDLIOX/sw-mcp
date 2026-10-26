@@ -233,7 +233,11 @@ def test_native_transform_requires_double_array_and_exact_readback():
     from scripts.sw_assembly import create_math_transform
     import pythoncom
     class Math:
+        def _FlagAsMethod(self,name):
+            assert name=='CreateTransform'
+            self.flagged=True
         def CreateTransform(self, argument):
+            assert self.flagged is True
             assert argument.varianttype==pythoncom.VT_ARRAY|pythoncom.VT_R8
             return type('Transform',(),{'ArrayData':argument.value})()
     sw=type('SW',(),{'GetMathUtility':lambda _:Math()})()
