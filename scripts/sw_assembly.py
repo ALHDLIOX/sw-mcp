@@ -606,8 +606,8 @@ def inspect_component_dofs(component):
     """@brief 回读 SW SDK 的 GetRemainingDOFs；保留原始状态和方向，不猜测未知值。
 
     @details 签名由 SW2026 原厂 Interop IComponent2 反射核对：12 个 out 参数，
-    6 组 status/MathPoint 或 MathVector，返回 Int32。状态按 swDofStatus_e 记录。
-    此接口网页未完整公开，失败保持 blocked，不能用可视运动代替自由度证明。
+    6 组 status/MathPoint 或 MathVector，返回 Int32。仅保存原始值，不套用枚举或计数语义。
+    此接口网页未完整公开，失败保持 blocked；自由度仍需真实 Mate 和六轴求解证据。
     """
     result = {"status": "blocked", "source": "IComponent2.GetRemainingDOFs", "errors": []}
     names = ("rotation_point_1", "rotation_axis_1", "rotation_point_2", "rotation_axis_2",

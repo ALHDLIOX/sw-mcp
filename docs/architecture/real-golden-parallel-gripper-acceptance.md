@@ -100,7 +100,7 @@ P0-1.2 安全配置阻塞保持原状，本阶段没有变更 Runner、Environme
 - [原生干涉计算](https://help.solidworks.com/2026/English/api/sldworksapi/SOLIDWORKS.Interop.sldworks~SOLIDWORKS.Interop.sldworks.IInterferenceDetectionMgr~GetInterferences.html)
 - [Body2 质量属性及世界坐标转换](https://help.solidworks.com/2024/english/api/sldworksapi/solidworks.interop.sldworks~solidworks.interop.sldworks.ibody2~getmassproperties.html)
 
-实际运行结果与失败记录在执行后补入证据索引和本节；本节以上是验收契约，不是已通过声明。
+以下记录实际执行结果；验收契约与历史诊断、正式五轮分别统计。
 
 ### 开发阶段发现并保留的问题
 
@@ -121,3 +121,98 @@ P0-1.2 安全配置阻塞保持原状，本阶段没有变更 Runner、Environme
 
 后续装配 API 诊断可复用上述真实零件文件，但必须标记 native_assembly_diagnostic_only，
 不属于从零建模的独立 Golden 轮次，也不计入连续五轮成功率。
+
+## 2026-10-26 本机实测结果
+
+正式五轮均使用冻结源码 `b2d0bc4bdc4067f9656b8b41321bbd2efd783d31`，真实 SolidWorks 2026 SP01.1
+（revision 34.1.1）、Windows 11、Python 3.12.10。之后的收尾提交只增加实际证据索引、文档和修正
+GetRemainingDOFs 注释，不改变执行或验收逻辑。交付 Commit 见堆叠 Draft PR 的 HEAD。
+
+先完成离线全量回归，再运行正式真机套件；每轮从零创建五种零件、独立进程、输出目录和 trace：
+
+| 轮次 | PID | 零件文件 / 组件实例 / Mate | SLDASM 重开 / STEP 回读 / BOM | 原生干涉 | 验收 / 任务 / 清理 |
+| --- | --- | --- | --- | --- | --- |
+| run-01 | 51052 | 5 / 9 / 22 | PASS / PASS / 9 | 0 | passed / blocked / pass |
+| run-02 | 6576 | 5 / 9 / 22 | PASS / PASS / 9 | 0 | passed / blocked / pass |
+| run-03 | 48788 | 5 / 9 / 22 | PASS / PASS / 9 | 0 | passed / blocked / pass |
+| run-04 | 35240 | 5 / 9 / 22 | PASS / PASS / 9 | 0 | passed / blocked / pass |
+| run-05 | 5276 | 5 / 9 / 22 | PASS / PASS / 9 | 0 | passed / blocked / pass |
+
+- 几何及装配成功率 5/5，预期人工门禁正确率 5/5，Test Acceptance=5、Task Completion=0、False Completion=0。
+- 五轮原始 Review 均 PASS/100、无 issues，manual_review_required=true；Core 实际终态均 blocked，
+  verification=PASS、recovery=user_action_required。唯一阻塞是 EXPECTED_MANUAL_REVIEW_REQUIRED，命令退出码 0。
+- 以同一批原始证据重算默认 completed 模式会拒绝验收，未额外执行或伪造 CAD；结果单独记录在离线控制文件。
+- 每轮 22 个健康且未抑制的原生 Mate：13 个重合、6 个同心、2 个平行、1 个距离；完整名称、类型、关联实体参数
+  及组件唯一 ID 见 built.json / reopened.json。固定件和运动件约束状态、两个独立 Z 移动方向均通过上述 14 项探针。
+- 正常装配原生干涉数量和总干涉体积均为 0。每轮实际穿透控制均检出 2 项，体积分别为
+  16864.920954 和 6480.0 mm³；抑制滑块 Mate 也被真实回读检出，恢复后正常快照重新通过。
+- 每轮原生及 STEP 回读均为 9 个实体，总体积约 208099.355043 mm³；逐体质心、圆柱面孔径、轴线与面积通过。
+  五件原生零件的特征、全约束草图、尺寸、孔位和材料均通过保存重开验证。
+- BOM 五行，数量为 1/2/2/2/2，共 9；CSV 1606 字节，编号、材料、尺寸/孔位/功能属性与组件一致。
+- 每轮四视角真实预览均已目视复核，结构一致。正投影可有正常遮挡，需结合等轴测及其它视角；没有制造工程图放行结论。
+- 清理成功率 5/5，每轮文档数归零、自有进程退出；套件后再次检查 SolidWorks 进程为空，本次 Python 入口也无残留。
+
+离线全量结果为 **999 passed / 1 skipped，118.09 s**。跳过项为既有桌面内嵌 Skill 未生成的发布包检查，
+未作为通过统计。11 个工作流共 **40 个 deterministic mock 场景**，预期结果准确率 100%、逃逸假完成率 0；
+**26 项 CI 策略合成快照测试**通过。这些离线结果均不属于真实 CAD 五轮。
+
+## Evidence 与复核入口
+
+机器可读索引：[p0-2-real-gripper-2026-10-26.json](evidence/p0-2-real-gripper-2026-10-26.json)。
+索引含各轮 PID/创建时间、trace ID、材料/模板路径及哈希、Mate 合同、体积、Review、清理及失败修复记录。
+每轮独立目录有原生零件、SLDASM、STEP、BOM、四视角、原始 Review、日志、快照、Core trace、Artifact Ledger
+和 SHA-256 清单。逐轮哈希条目共 145 项；原始失败也保留，未用后续通过结果替换。
+
+本机证据路径：
+
+```text
+E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-real-five-01\summary.json
+E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-real-five-01\run-01..05\report.json
+E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-offline\pytest-full-final.log
+E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-offline\eval-final\eval_report.json
+E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-evidence-20261026.zip
+E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-evidence-sha256.json
+E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-independent-seal-verification.json
+```
+
+ZIP 为 **11743432 字节 / 258 项**，包含正式五轮、开发 pilot、三个装配诊断、离线日志、SDK 签名、运行配置、
+诊断/归档复核脚本和证据索引。SHA-256：
+
+```text
+0cdd1d7287ca6fd0438ba555a547d155ff5f22bd62bb0ee1161bd66d8e2ca1ac
+```
+
+归档后独立验证 ZIP CRC、压缩包 SHA-256、257 项清单中的磁盘字节与 ZIP 字节一致性，并再次调用逐轮
+Evidence/Core/Ledger/交付语义检查；全部通过。首次离线失败的完整控制台未预先落盘，索引明确该日志限制，
+其后所有完整回归及真实失败日志均保留。输出目录受 .gitignore 保护，完整大文件归档留在本机，未上传远程附件。
+
+## 本阶段完整变更清单
+
+```text
+golden-workflows.yaml                                     新增统一夹爪规格
+scripts/sw_assembly.py                                    严格原生变换、Mate 和 SDK 诊断回读
+tests/golden_workflow_support.py                          注册 SLDASM 用例及专用模板配置
+tests/golden_workflow_harness.py                          共用双状态、证据/终态/隔离与失败停止壳
+tests/solidworks_golden_parallel_gripper_2026.py            真实建模、装配、故障控制和交付回读
+tests/test_solidworks_golden_parallel_gripper_2026.py       36 项离线故障及安全回归
+tests/test_eval_runner.py                                 按 Golden 定义推导工作流和场景数
+references/assembly.md                                    修正原生干涉 API 用法
+docs/architecture/real-golden-parallel-gripper-acceptance.md 验收规格、运行和本机实测报告
+docs/architecture/evidence/p0-2-real-gripper-2026-10-26.json  实际证据索引
+```
+
+## 未验证范围及 P0-2.1
+
+业务任务仍为 BLOCKED，未启用自动审批。Core 仅终态适配，不声称逐步调度了真实建模。
+GetRemainingDOFs 的私有直接计数语义仍未验证；两独立移动方向的结论仅限本规格的原生 Mate 和有限六轴探针，
+不等于全行程、限位、接触或其它版本认证。COM 单次调用永久挂起恢复也未验证。
+
+初始诊断发现旧 apply_component_transform_x 在本机有 ArrayData 空写入风险；本阶段新增严格 helper 并让
+夹爪用例逐项回读，未全局重写旧函数，其它旧调用链未做本阶段真机复测，不扩大原有验证范围。
+
+建议 P0-2.1 优先补齐导杆夹紧/轴向保持、支撑/底座和手指紧固接口、轴承及公差工程图，再定义限位和全行程
+原生碰撞回归。电机、丝杠、同步带、同步驱动、载荷/刚度/磨损及 Motion Study 需另立规格与验证，当前全部未完成。
+
+远程 CAD CI **BLOCKED / 未执行**，继承 P0-1.2 的 Runner 隔离、GitHub 审计凭据与审批安全配置前置条件。
+本阶段没有修改生产 Review、Core、capabilities、Windows CAD 工作流、Runner、Environment 或仓库权限。
+保留堆叠 Draft PR；不建议在人工工程复核及前置安全条件关闭前直接合并 main。
