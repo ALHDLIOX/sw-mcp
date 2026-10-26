@@ -11,6 +11,9 @@ CASE_REGISTRY = {"mounting_bracket": {"module": "solidworks_golden_mounting_brac
                                      "basename": "mounting_bracket", "year": 2026, "blocked_runs": 5},
                  "parallel_gripper_assembly": {"module": "solidworks_golden_parallel_gripper_2026",
                      "basename": "parallel_gripper_assembly", "year": 2026, "blocked_runs": 5,
+                     "native_extension": "SLDASM"},
+                 "parallel_gripper_retention_travel": {"module": "solidworks_golden_gripper_travel_2026",
+                     "basename": "parallel_gripper_retention_travel", "year": 2026, "blocked_runs": 5,
                      "native_extension": "SLDASM"}}
 VIEWS = ("isometric", "front", "top", "right")
 
