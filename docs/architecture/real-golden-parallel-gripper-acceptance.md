@@ -42,13 +42,17 @@ P0-1.2 的安装板验收范围、生产 Review 和 Execution Core 安全门禁�
 共 18 个真实 Mate。初始变换只用于插入定位；验收回读 MateGroup、Mate2 类型、抑制/健康、MateEntity2
 关联组件 ID 和实体参数，并回读组件变换、固定状态、约束状态和实例唯一 ID。
 
-GetConstrainedStatus 只能证明整体约束状态，不能单独证明自由度数。额外回读 SW2026 原厂 SDK 中
-IComponent2.GetRemainingDOFs 的原始计数、旋转/平移状态和向量：目标为每组滑块/手指仅有一条 Z 平移，
-静态件无自由度。再用 SetTransformAndSolve2 各自正负移动 2 mm，检查对应手指跟随、其它组不动、恢复准确。
+GetConstrainedStatus 只能证明整体约束状态，不能单独证明自由度数。目标自由度通过实际同心 Mate 的
+LockRotation、关联实体轴线、手指的刚性平面 Mate、静态件完全约束状态，以及原生 SetTransformAndSolve2
+六轴探针联合证明。两个滑块各执行 Z 正负移动 2 mm、X/Y 平移和 X/Y/Z 旋转请求，共 14 项；
+只允许 Z 平移且手指跟随，另一组及静态件不得变化，其它五个方向必须被约束，逐次恢复。
+每次请求都用 SAFEARRAY(double) 创建 MathTransform 并回读全部 16 项，不把无效 ArrayData 写入当作请求成功。
 测试运动不会退回直接 Transform2 赋值；无法读取或证明时验收失败，不以视觉代替证明。
 
-GetRemainingDOFs 网页说明不完整，本阶段只使用本机 2026 SDK 交叉验证，不能宣称其它版本支持。
-12 个 out 参数及枚举在原厂 sldworks.tlb / Interop 中核对，原始签名另存离线证据。
+GetRemainingDOFs 网页说明不完整，12 个 out 参数已在本机原厂 sldworks.tlb / Interop 中核对，
+原始签名另存离线证据。首轮实测证明其返回值不是自由度数，状态也不能直接套用 swDofStatus_e；
+因此只保留原始 SDK 诊断和一致性检查，不把它写成直接自由度计数。精确运动约束结论以上述原生 Mate
+和六轴探针为依据，仍需人工工程复核，也不宣称其它版本支持该私有接口语义。
 
 ## 装配、干涉与交付验收
 
@@ -61,6 +65,8 @@ GetRemainingDOFs 网页说明不完整，本阶段只使用本机 2026 SDK 交�
 
 STEP 在真实 SolidWorks 中重新导入，逐体匹配九个实体的体积、世界质心、圆柱面孔径/轴线和面积，
 处理导入后拆分的圆柱接缝。BOM CSV 复用 sw_delivery，并与实际组件引用、数量和磁盘内容交叉检查。
+零件原生自定义属性同时保存编号、材料及从规格派生的尺寸/孔位/功能说明，BOM 必须回读一致；不向 CSV
+填充无关文字，也不关闭通用 Review 的文件大小规则。
 原始 Review 使用 sw_review，不修改其人工复核标记。装配体不支持的零件孔测量字段不能宣称已由通用
 Review 完成，而由本用例的独立零件与装配 B-Rep 规则承担。
 
@@ -94,3 +100,17 @@ P0-1.2 安全配置阻塞保持原状，本阶段没有变更 Runner、Environme
 - [Body2 质量属性及世界坐标转换](https://help.solidworks.com/2024/english/api/sldworksapi/solidworks.interop.sldworks~solidworks.interop.sldworks.ibody2~getmassproperties.html)
 
 实际运行结果与失败记录在执行后补入证据索引和本节；本节以上是验收契约，不是已通过声明。
+
+### 开发阶段发现并保留的问题
+
+1. 首次离线定向测试 26 failed / 33 passed：合成夹具预填 trace 文本，与 Core JSONL 混合。
+   修正夹具为仅由真实 Core 适配生成 trace，定向和完整回归随后通过；未启动 CAD。
+2. 首轮真实诊断（pilot-01，PID 46796）五种原生零件均通过，但装配 Z 初始变换未实际生效，
+   滑块重叠，原生干涉检测返回 4 项（最大 16864.920954 mm³）。任务及验收均 failed，退出码 1，
+   SLDASM、STEP、BOM、预览及完整证据均保留，清理通过。
+3. 同轮暴露 GetRemainingDOFs 返回值/状态不可按原假设解释，以及空 BOM 属性导致 CSV 只有 765 字节、
+   通用 Review 出现 WARN。修复方向分别为原生六轴探针与明确 SDK 诊断范围，以及保存真实编号、材料和
+   尺寸/孔位/功能属性；没有修改生产 Review，没有把 WARN 改写为 PASS。
+
+后续装配 API 诊断可复用上述真实零件文件，但必须标记 native_assembly_diagnostic_only，
+不属于从零建模的独立 Golden 轮次，也不计入连续五轮成功率。

@@ -87,13 +87,15 @@ def validate_part(snapshot, part, spec):
 
 
 def dof_valid(row, moving):
-    """@brief GetRemainingDOFs 必须明确给出一条 Z 平移，无自由旋转；未知不算通过。"""
-    if row.get('status')!='pass' or row.get('errors') or row.get('count')!=(1 if moving else 0): return False
-    if not moving: return True
-    axes=[row.get(k,{}) for k in ('translation_axis_1','translation_axis_2')]
-    free=[a for a in axes if a.get('state') in (3,4)]
-    return len(free)==1 and len(free[0].get('vector') or [])==3 and all(near(a,b,1e-6) for a,b in zip(map(abs,free[0]['vector']),(0,0,1))) \
-        and all(row.get(k,{}).get('state') in (0,1,2) for k in ('rotation_axis_1','rotation_axis_2'))
+    """@brief 私有 SDK 输出只作一致性诊断；自由度由真实 Mate、约束状态和六轴求解探针联合证明。"""
+    if row.get('status')!='pass' or row.get('errors') or type(row.get('return_code')) is not int: return False
+    if any(row.get(k,{}).get('state')!=0 for k in ('rotation_axis_1','rotation_axis_2')): return False
+    for name in ('translation_axis_1','translation_axis_2'):
+        axis=row.get(name,{})
+        if type(axis.get('state')) is not int: return False
+        vector=axis.get('vector')
+        if vector is not None and (not moving or len(vector)!=3 or not all(near(a,b,1e-6) for a,b in zip(map(abs,vector),(0,0,1)))): return False
+    return True
 
 
 def validate_neutral(snapshot,spec):
@@ -207,22 +209,47 @@ def bom_valid(rows,spec):
     """@brief BOM 按真实引用文件统计，五种零件数量必须为 1/2/2/2/2。"""
     expected={p:sum(i['part']==p for i in spec['instances'].values()) for p in spec['parts']}
     actual={Path(r['file']).stem:r['quantity'] for r in rows}
-    return len(rows)==5 and actual==expected and all(r.get('excluded_from_bom') is False for r in rows)
+    return len(rows)==5 and actual==expected and all(r.get('excluded_from_bom') is False
+        and r.get('part_number')=='P0-2-'+Path(r['file']).stem.upper()
+        and r.get('material')=='6061-T6' and r.get('description')==part_description(Path(r['file']).stem,spec['parts'][Path(r['file']).stem]) for r in rows)
+
+
+def part_description(name,part):
+    """@brief BOM 的实际工程描述含尺寸、孔位与功能，来自统一规格而非文件大小填充。"""
+    functions={'base':'安装底座，为两端导向支撑提供固定基准','rod':'圆柱导向杆，承接滑块的轴向导向',
+        'support':'导杆端部支撑座，定位两根平行导杆','slider':'移动滑块，沿双导杆移动并承载夹持手指','finger':'夹持手指，与对应滑块固定连接'}
+    return functions[name]+'；名义参数（mm）：'+json.dumps(part,ensure_ascii=False,sort_keys=True)
 
 
 def motion_evidence_valid(probes,spec):
     """@brief 根据原始位姿重算独立运动与恢复，禁止仅相信缓存的成功标志。"""
-    if len(probes)!=4 or {(p.get('role'),p.get('sign')) for p in probes}!={(r,s) for r in ('slider_left','slider_right') for s in (-1,1)}: return False
+    modes=('tz_negative','tz_positive','tx','ty','rx','ry','rz')
+    if len(probes)!=14 or {(p.get('role'),p.get('mode')) for p in probes}!={(r,m) for r in ('slider_left','slider_right') for m in modes}: return False
     for p in probes:
-        if p.get('solver_success') is not True or p.get('restored') is not True: return False
+        axial=p['mode'].startswith('tz_')
+        if (axial and p.get('solver_success') is not True) or p.get('restored') is not True: return False
+        requested=probe_target(p['before'][p['role']],p['mode'],spec)
+        for key in ('requested','transform_readback'):
+            if len(p.get(key,[]))!=16 or not all(near(a,b,1e-10) for a,b in zip(p[key],requested)): return False
         for role,instance in spec['instances'].items():
             initial=[1,0,0,0,1,0,0,0,1,*[v/1000 for v in instance['translation_mm']],1,0,0,0]
             target=list(initial)
-            if role in (p['role'],p['role'].replace('slider','finger')): target[11]+=p['sign']*spec['motion_probe_mm']/1000
+            if axial and role in (p['role'],p['role'].replace('slider','finger')): target[11]+=(-1 if p['mode']=='tz_negative' else 1)*spec['motion_probe_mm']/1000
             for key,wanted in (('before',initial),('after',target),('end',initial)):
                 actual=p.get(key,{}).get(role,[])
                 if len(actual)!=16 or not all(near(a,b,1e-7) for a,b in zip(actual,wanted)): return False
     return True
+
+
+def probe_target(initial,mode,spec):
+    """@brief 生成六轴测试请求；必须回读实际 MathTransform，避免空写入产生假探针。"""
+    target=list(initial)
+    if mode.startswith('tz_'): target[11]+=(-1 if mode=='tz_negative' else 1)*spec['motion_probe_mm']/1000
+    elif mode in ('tx','ty'): target[9 if mode=='tx' else 10]+=.002
+    else:
+        c,s=math.cos(.05),math.sin(.05)
+        target[:9]={'rx':[1,0,0,0,c,-s,0,s,c],'ry':[c,0,s,0,1,0,-s,0,c],'rz':[c,-s,0,s,c,0,0,0,1]}[mode]
+    return target
 
 
 def inspect_delivery(output,report):
@@ -298,12 +325,13 @@ def create_parts(session,output,report,spec):
     from scripts.sw_part import sketch,sketch_rectangle,sketch_circle,extrude_boss,extrude_cut
     from scripts.sw_sketch_quality import fully_define_sketch
     from scripts.sw_appearance import set_document_appearance
+    from scripts.sw_document_data import set_custom_properties
     config=report['runtime_config']
     database=resolve_material_database(config,report['doctor']['installations']['solidworks']['executable'])
     report['resolved_material_database']={'path':str(database),'sha256':sha256_file(database)}
     parts={}; (output/'parts').mkdir()
     for name,part in spec['parts'].items():
-        model=session.new_part(config['part_template'])
+        model=session.new_part(report['resolved_templates']['part']['path'])
         with sketch(model,'Front Plane') as ref:
             if 'diameter_mm' in part: sketch_circle(model,0,0,part['diameter_mm']/2000)
             else: sketch_rectangle(model,*[v/1000 for v in part['center_xy_mm']],*[v/1000 for v in part['size_mm'][:2]])
@@ -318,6 +346,9 @@ def create_parts(session,output,report,spec):
                 fully_define_sketch(model)
             if extrude_cut(model,ref,0,direction=True) is None: raise RuntimeError('导向孔切除失败')
         member(model,'SetMaterialPropertyName2','',str(database),spec['material_entry'])
+        properties=set_custom_properties(model,{'PartNumber':'P0-2-'+name.upper(),
+            'Description':part_description(name,part),'Material':'6061-T6'})
+        if properties['success'] is not True: raise RuntimeError('零件 BOM 属性回读失败: '+name)
         color={'base':[.3,.4,.6],'rod':[.7,.7,.72],'support':[.3,.4,.6],'slider':[.8,.5,.15],'finger':[.35,.35,.38]}[name]
         set_document_appearance(model,color)
         row={}
@@ -345,18 +376,25 @@ def create_parts(session,output,report,spec):
 def create_assembly(session,output,report,spec):
     """@brief 初始放置后创建真实 Mate；不使用变换矩阵替代约束。"""
     from scripts.sw_connect import get_com_member as member, create_empty_dispatch_variant
-    from scripts.sw_assembly import (add_component,apply_component_transform_x,get_component_feature_entity,
+    from scripts.sw_assembly import (add_component,build_transform_data_x,create_math_transform,get_component_feature_entity,
         select_entities_for_mate,add_mate5_checked,iter_feature_tree,get_assembly_entity)
-    model=session.new_assembly(report['runtime_config']['assembly_template'])
+    model=session.new_assembly(report['resolved_templates']['assembly']['path'])
     components={}
     for role,instance in spec['instances'].items():
         c=add_component(model,str(output/'parts'/f"{instance['part']}.SLDPRT"),sw=session.sw)
         if c is None: raise RuntimeError('插入组件失败: '+role)
         c.ComponentReference=role
-        if not apply_component_transform_x(c,*[v/1000 for v in instance['translation_mm']]): raise RuntimeError('初始放置失败')
         model.ClearSelection2(True)
         if not c.Select4(False,create_empty_dispatch_variant(),False): raise RuntimeError('无法选择组件')
-        member(model,'FixComponent' if instance['fixed'] else 'UnfixComponent')
+        member(model,'UnfixComponent')
+        data=build_transform_data_x(*[v/1000 for v in instance['translation_mm']])
+        c.Transform2=create_math_transform(session.sw,data)
+        actual=list(member(member(c,'Transform2'),'ArrayData'))
+        if not all(near(a,b,1e-9) for a,b in zip(actual,data)): raise RuntimeError('初始放置回读失败: '+role)
+        if instance['fixed']:
+            model.ClearSelection2(True)
+            c.Select4(False,create_empty_dispatch_variant(),False)
+            member(model,'FixComponent')
         components[role]=c
     def cylinder(role,x):
         c=components[role]; part=member(c,'GetModelDoc2')
@@ -385,47 +423,45 @@ def create_assembly(session,output,report,spec):
     return model,components
 
 
-def motion_probe(model,components,spec):
-    """@brief 仅调用原生求解器移动，验证各自手指跟随、另一滑块不动并恢复原位。"""
+def motion_probe(model,components,spec,sw):
+    """@brief 原生求解器六轴探针：只允许 Z 平移，另外五个方向必须约束并逐次恢复。"""
     from scripts.sw_connect import get_com_member as member
+    from scripts.sw_assembly import create_math_transform
     result=[]
     read=lambda:{role:list(member(member(c,'Transform2'),'ArrayData')) for role,c in components.items()}
     for role in ('slider_left','slider_right'):
-        for sign in (-1,1):
+        for mode in ('tz_negative','tz_positive','tx','ty','rx','ry','rz'):
             before=read(); c=components[role]
-            desired=list(before[role]); desired[11]+=sign*spec['motion_probe_mm']/1000
-            transform=member(c,'Transform2'); transform.ArrayData=desired
+            desired=probe_target(before[role],mode,spec)
+            transform=create_math_transform(sw,desired)
+            requested_readback=list(member(transform,'ArrayData'))
             success=bool(member(c,'SetTransformAndSolve2',transform))
             member(model,'ForceRebuild3',False)
-            after=read(); finger=role.replace('slider','finger')
-            checks=[]
-            for key in before:
-                target=desired if key in (role,finger) else before[key]
-                checks.append(all(near(a,b,1e-7) for a,b in zip(after[key],target)))
-            transform=member(c,'Transform2'); transform.ArrayData=before[role]
+            after=read()
+            transform=create_math_transform(sw,before[role])
             restored=bool(member(c,'SetTransformAndSolve2',transform))
             member(model,'ForceRebuild3',False)
             end=read()
             restored &= all(all(near(a,b,1e-7) for a,b in zip(end[k],before[k])) for k in before)
-            result.append({'role':role,'sign':sign,'before':before,'requested':desired,'after':after,'end':end,
-                'solver_success':success,'validation_passed':all(checks),'restored':bool(restored)})
+            result.append({'role':role,'mode':mode,'before':before,'requested':desired,'transform_readback':requested_readback,'after':after,'end':end,
+                'solver_success':success,'restored':bool(restored)})
     return result
 
 
-def native_fault_controls(model,components):
+def native_fault_controls(model,components,sw):
     """@brief 在自有装配中注入实际穿透与 Mate 抑制，保留原始证据，恢复后再保存交付。"""
     import pythoncom
     from win32com.client import VARIANT
     from scripts.sw_connect import get_com_member as member
-    from scripts.sw_assembly import iter_feature_tree
+    from scripts.sw_assembly import iter_feature_tree,create_math_transform
     c=components['slider_left']
     original=list(member(member(c,'Transform2'),'ArrayData'))
     desired=list(original); desired[11]=.025
-    transform=member(c,'Transform2'); transform.ArrayData=desired
+    transform=create_math_transform(sw,desired)
     success=bool(member(c,'SetTransformAndSolve2',transform))
     member(model,'ForceRebuild3',False)
     collision={'solver_success':success,'snapshot':assembly_snapshot(model)}
-    transform=member(c,'Transform2'); transform.ArrayData=original
+    transform=create_math_transform(sw,original)
     restored=bool(member(c,'SetTransformAndSolve2',transform))
     member(model,'ForceRebuild3',False)
     collision['restored']=restored and all(near(a,b,1e-7) for a,b in zip(member(member(c,'Transform2'),'ArrayData'),original))
@@ -448,7 +484,7 @@ def run_cad(output,report):
     """@brief 独占真实实例，串行执行零件/装配/回读/导出；只清理本轮可证明拥有的文档。"""
     import pythoncom
     from scripts.sw_session import SolidWorksSession
-    from scripts.sw_connect import get_com_member as member,get_sw_version
+    from scripts.sw_connect import get_com_member as member,get_sw_version,find_template
     from scripts.sw_process import solidworks_processes
     from scripts.sw_part import clear_sketch_selection_cache
     from scripts.sw_review import run_review
@@ -469,10 +505,15 @@ def run_cad(output,report):
         pid=int(member(session.sw,'GetProcessID')); report['process_created_at']=process_created_at(pid)
         owned=session.connection_info.get('started_by_cad_studio') is True and pid not in prior
         if not owned or report['version']['year']!=2026 or list(member(session.sw,'GetDocuments') or []): raise RuntimeError('BLOCKED: 实例所有权不能证明')
+        report['resolved_templates']={}
+        for kind in ('part','assembly'):
+            template=report['runtime_config'][kind+'_template'] or find_template(session.sw,kind)
+            if not template or not Path(template).is_file(): raise RuntimeError('BLOCKED: '+kind+' 模板不可用')
+            report['resolved_templates'][kind]={'path':str(template),'sha256':sha256_file(Path(template))}
         create_parts(session,output,report,spec)
         model,components=create_assembly(session,output,report,spec)
-        report['motion_probes']=motion_probe(model,components,spec)
-        report['native_fault_controls']=native_fault_controls(model,components)
+        report['motion_probes']=motion_probe(model,components,spec,session.sw)
+        report['native_fault_controls']=native_fault_controls(model,components,session.sw)
         write_json(output/'native_fault_controls.json',report['native_fault_controls'])
         report['built']=assembly_snapshot(model); write_json(output/'built.json',report['built'])
         native=output/f'{CASE_ID}.SLDASM'

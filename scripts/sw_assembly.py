@@ -623,7 +623,9 @@ def inspect_component_dofs(component):
             if len(value) != 13:
                 raise ValueError("GetRemainingDOFs 返回数组形状未知")
             value, *values = value
-        result["count"] = int(value)
+        # 本机实测返回值 0/2 并非自由度数；不得按 swDofStatus_e 猜测私有接口语义。
+        result["return_code"] = int(value)
+        result["semantic_scope"] = "raw_sdk_diagnostics_not_dof_count"
         for index, name in enumerate(names):
             state, vector = values[index * 2:index * 2 + 2]
             result[name] = {"state": int(state), "vector": list(safe_get_com_member(vector, "ArrayData")) if vector is not None else None}
@@ -631,6 +633,24 @@ def inspect_component_dofs(component):
     except Exception as error:
         result["errors"].append(str(error))
     return result
+
+
+def create_math_transform(sw, values):
+    """@brief 用原厂 MathUtility 与 SAFEARRAY(double) 创建变换，并回读所有 16 项。
+
+    @details SW2026 IMathUtility.CreateTransform(Object)->MathTransform；普通 Python
+    数组写入 ArrayData 可能不生效，不能只看 setter 或 SetTransformAndSolve2 返回值。
+    """
+    values = tuple(float(v) for v in values)
+    if len(values) != 16 or not all(math.isfinite(v) for v in values):
+        raise ValueError("变换必须含 16 个有限值")
+    transform = get_com_member(sw, "GetMathUtility").CreateTransform(VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, values))
+    if transform is None:
+        raise RuntimeError("MathUtility.CreateTransform 返回空")
+    actual = list(get_com_member(transform, "ArrayData"))
+    if len(actual) != 16 or any(abs(a-b) > 1e-10 for a,b in zip(actual,values)):
+        raise RuntimeError("MathTransform 回读与请求不一致")
+    return transform
 
 
 def inspect_native_mates(model):

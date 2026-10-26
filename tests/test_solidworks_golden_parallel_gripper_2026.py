@@ -41,7 +41,7 @@ def synthetic_report(output,pid=1234):
         'neutral':{'bodies':[],'errors':[]},'bom':[]}
     for index,(role,instance) in enumerate(spec['instances'].items(),1):
         part=spec['parts'][instance['part']]; moving=role.startswith(('slider_','finger_'))
-        dofs={'status':'pass','errors':[],'count':1 if moving else 0,
+        dofs={'status':'pass','errors':[],'return_code':0,
             'rotation_axis_1':{'state':0},'rotation_axis_2':{'state':0},
             'translation_axis_1':{'state':3 if moving else 0,'vector':[0,0,1] if moving else None},'translation_axis_2':{'state':0}}
         transform=[1,0,0,0,1,0,0,0,1,*[v/1000 for v in instance['translation_mm']],1,0,0,0]
@@ -63,18 +63,21 @@ def synthetic_report(output,pid=1234):
             'health':{'health_status':'healthy'},'lock_rotation':mate.get('lock_rotation',False),
             'entities':[{'role':r,'component_id':ids[r],'reference_present':True,'reference_type':0,'entity_params':[0,0,1]} for r in mate['roles']]})
     for name in spec['parts']:
-        native['bom'].append({'item':len(native['bom'])+1,'part_number':name,'description':'','material':'',
+        native['bom'].append({'item':len(native['bom'])+1,'part_number':'P0-2-'+name.upper(),'description':case.part_description(name,spec['parts'][name]),'material':'6061-T6',
             'quantity':sum(i['part']==name for i in spec['instances'].values()),'file':str(output/'parts'/f'{name}.SLDPRT'),
             'configuration':'Default','component':name,'excluded_from_bom':False})
     report.update(built=copy.deepcopy(native),reopened=copy.deepcopy(native),step_reopened=copy.deepcopy(native['neutral']))
     original={c['role']:c['transform'] for c in native['components']}
     probes=[]
     for role in ('slider_left','slider_right'):
-        for sign in (-1,1):
+        for mode in ('tz_negative','tz_positive','tx','ty','rx','ry','rz'):
             after=copy.deepcopy(original)
-            for key in (role,role.replace('slider','finger')): after[key][11]+=sign*.002
-            probes.append({'role':role,'sign':sign,'solver_success':True,'restored':True,
-                           'before':copy.deepcopy(original),'after':after,'end':copy.deepcopy(original)})
+            if mode.startswith('tz_'):
+                for key in (role,role.replace('slider','finger')): after[key][11]+=(-1 if mode=='tz_negative' else 1)*.002
+            requested=case.probe_target(original[role],mode,spec)
+            probes.append({'role':role,'mode':mode,'solver_success':True,'restored':True,
+                'before':copy.deepcopy(original),'requested':requested,'transform_readback':copy.deepcopy(requested),
+                'after':after,'end':copy.deepcopy(original)})
     report['motion_probes']=probes
     collision=copy.deepcopy(native)
     collision['interference']={'status':'warn','interference_count':1,'items':[{'volume_mm3':10}],'errors':[]}
@@ -223,3 +226,27 @@ def test_expected_block_requires_five_and_preserves_existing_outputs(tmp_path):
     assert not (tmp_path/'new').exists()
     (tmp_path/'existing').mkdir()
     with pytest.raises(FileExistsError): case.main(['--output',str(tmp_path/'existing')])
+
+
+def test_native_transform_requires_double_array_and_exact_readback():
+    """@brief 回归首轮真实 Z 偏移空写入；编组类型或回读不符必须拒绝。"""
+    from scripts.sw_assembly import create_math_transform
+    import pythoncom
+    class Math:
+        def CreateTransform(self, argument):
+            assert argument.varianttype==pythoncom.VT_ARRAY|pythoncom.VT_R8
+            return type('Transform',(),{'ArrayData':argument.value})()
+    sw=type('SW',(),{'GetMathUtility':lambda _:Math()})()
+    values=[1,0,0,0,1,0,0,0,1,0,0,-.07,1,0,0,0]
+    assert list(create_math_transform(sw,values).ArrayData)==values
+    sw.GetMathUtility=lambda:type('BadMath',(),{'CreateTransform':lambda _,arg:type('T',(),{'ArrayData':[0]*16})()})()
+    with pytest.raises(RuntimeError): create_math_transform(sw,values)
+
+
+def test_cached_success_cannot_replace_actual_six_axis_request(tmp_path):
+    """@brief 空写入、未发出旋转请求或返回错误姿态都不能算约束方向验证。"""
+    report=synthetic_report(tmp_path/'offline')
+    probes=report['motion_probes']
+    assert case.motion_evidence_valid(probes,case.load_spec())
+    probes[2]['transform_readback']=probes[2]['before']['slider_left']
+    assert not case.motion_evidence_valid(probes,case.load_spec())
