@@ -132,12 +132,16 @@ def mate_contract(spec=None):
         else: planes=[(p,p,v) for p,v in zip(('Right Plane','Top Plane','Front Plane'),relative)]
         for index,(left,right,distance) in enumerate(planes):
             rows.append({'name':role+'_datum_'+str(index),'roles':[role,other],'type':5 if distance else (3 if role.startswith('rod_') else 0),
-                'planes':[left,right],'distance_mm':abs(distance),'flip':distance>0})
+                'planes':[left,right],'distance_mm':abs(distance),
+                # 铆钉绕 X 转 90° 后，Top 法向与滑块 Front 相反；沿反向法向修正距离符号。
+                'flip':bool(distance>0) ^ bool(i.get('angle_x') and left=='Top Plane')})
     for role in ('slider_left','slider_right'):
         for rod,x in [('rod_left',-18),('rod_right',18)]: rows.append({'name':role+'_'+rod,'roles':[role,rod],'type':1,'left_x':x,'right_x':0})
         low,mid,high=s['travel_mm'][role]
-        rows.append({'name':role+'_travel_limit','roles':[role,'base'],'type':5,'planes':['Front Plane','Front Plane'],
-            'distance_mm':mid+58,'minimum_mm':low+58,'maximum_mm':high+58,'flip':True})
+        reference='endplate_left' if role=='slider_left' else 'base'
+        origin=s['instances'][reference]['translation_mm'][2]
+        rows.append({'name':role+'_travel_limit','roles':[role,reference],'type':5,'planes':['Front Plane','Front Plane'],
+            'distance_mm':mid-origin,'minimum_mm':low-origin,'maximum_mm':high-origin,'flip':True})
     return rows
 
 
@@ -204,7 +208,8 @@ def native_valid(snapshot,positions=None,spec=None,interference_required=True):
                 e.get('reference_present') is True and e.get('component_id')==ids.get(e['role']) and bool(e.get('entity_params')) for e in entities)
         if 'minimum_mm' in wanted:
             limit=snapshot['limits'].get(wanted['name'],{})
-            checks[wanted['name']+'_bounds']=limit.get('advanced') is True and near(limit.get('minimum_mm'),wanted['minimum_mm'],.001) and near(limit.get('maximum_mm'),wanted['maximum_mm'],.001)
+            distance=(poses[wanted['roles'][0]][11]-poses[wanted['roles'][1]][11])*1000
+            checks[wanted['name']+'_bounds']=limit.get('advanced') is True and near(limit.get('minimum_mm'),wanted['minimum_mm'],.001) and near(limit.get('maximum_mm'),wanted['maximum_mm'],.001) and near(limit.get('distance_mm'),distance,.001)
     if interference_required:
         i=snapshot['interference']; checks['native_interference']=i.get('status')=='pass' and i.get('interference_count')==0 and i.get('items')==[] and i.get('errors')==[]
     return {'status':'pass' if all(checks.values()) else 'fail','checks':checks}
@@ -253,8 +258,11 @@ def travel_valid(rows,spec=None):
 def request_valid(row):
     """@brief 请求自身必须真实编组、回读且被求解器执行，不能以缓存的成功标记替代。"""
     wanted=row.get('requested_transform',[]); actual=row.get('request_readback',[])
+    update=row.get('mate_update',{})
     return row.get('solver_success') is True and len(wanted)==len(actual)==len(row.get('actual_transform',[]))==16 \
-        and near(wanted[11]*1000,row.get('requested_mm'),1e-8) and all(near(a,b,1e-10) for a,b in zip(wanted,actual))
+        and near(wanted[11]*1000,row.get('requested_mm'),1e-8) and all(near(a,b,1e-10) for a,b in zip(wanted,actual)) \
+        and row.get('positioning_method')=='native_limit_mate_current_distance' and update.get('modified') is True \
+        and update.get('advanced') is True and near(update.get('distance_mm'),row['requested_mm']-update['reference_origin_mm'],.001)
 
 
 def overtravel_valid(rows,spec=None):
@@ -264,11 +272,30 @@ def overtravel_valid(rows,spec=None):
     for row in rows:
         # 越限请求允许求解器返回 False，但请求的编组必须真实；实际位置必须保持在界内。
         wanted=row.get('requested_transform',[]); readback=row.get('request_readback',[]); actual=row.get('actual_transform',[])
+        if row.get('positioning_method')!='native_transform_request_no_parameter_commit': return False
         if len(wanted)!=len(readback) or len(wanted)!=16 or len(actual)!=16 or not all(near(a,b,1e-10) for a,b in zip(wanted,readback)) or not near(wanted[11]*1000,row['requested_mm'],1e-8): return False
         z=actual[11]*1000; low,mid,high=s['travel_mm'][row['role']]
         if not low-.001<=z<=high+.001 or near(z,row['requested_mm'],.001) or not near(z,row.get('actual_mm'),1e-8): return False
         poses=positions_for(z if row['role']=='slider_left' else -40,z if row['role']=='slider_right' else 22,s)
         if native_valid(row['snapshot'],poses,s)['status']!='pass': return False
+    return True
+
+
+def physical_overtravel_valid(rows,spec=None):
+    """@brief 四个真实越限必须产生对应止挡穿透且被正常规则拒绝；不声称接触求解器自动阻挡。"""
+    s=spec or load_spec();expected={(role,target) for role,b in s['travel_mm'].items() for target in (b[0]-2,b[-1]+2)}
+    if len(rows)!=4 or {(r['request']['role'],r['request']['requested_mm']) for r in rows}!=expected:return False
+    for row in rows:
+        request=row['request'];role=request['role'];target=request['requested_mm'];snap=row['snapshot']
+        if not request_valid(request) or not near(request['actual_transform'][11]*1000,target,.001) or row.get('restored') is not True:return False
+        interference=snap['interference'];names={c['name']:c['role'] for c in snap['components']}
+        stop=('support_left' if target<-58 else 'base') if role=='slider_left' else ('base' if target<4 else 'support_right')
+        if interference.get('status')!='warn' or interference.get('errors')!=[] or (interference.get('interference_count') or 0)<=0:return False
+        if not any(i.get('volume_mm3',0)>0 and {role,stop}.issubset({names[c['name']] for c in i['components']}) for i in interference['items']):return False
+        poses=positions_for(target if role=='slider_left' else -40,target if role=='slider_right' else 22,s)
+        validation=native_valid(snap,poses,s)
+        failed={k for k,v in validation['checks'].items() if not v}
+        if not failed or not failed.issubset({role+'_travel_limit_bounds','native_interference'}):return False
     return True
 
 
@@ -288,7 +315,8 @@ def workflow_checks(report):
     checks['nine_travel_states']=travel_valid(report['travel_report'],s)
     checks['tolerance']=report['tolerance_report']==tolerance_contract(s) and all(near(a,b,1e-9) for a,b in zip(tolerance_contract(s)['diametral_clearance_limits_mm'],s['fit']['clearance_limits_mm']))
     controls=report['native_fault_controls']
-    checks['limit_overtravel_rejected']=overtravel_valid(controls['overtravel'],s)
+    checks['raw_transform_request_keeps_valid_pose']=overtravel_valid(controls['overtravel'],s)
+    checks['physical_overtravel_detected']=physical_overtravel_valid(controls['physical_overtravel'],s)
     collision=controls['collision']['snapshot']
     checks['real_collision_detected']=controls['collision']['restored'] is True and request_valid(controls['collision']['request']) and near(controls['collision']['request']['actual_transform'][11],-.003,1e-7) \
         and collision['interference']['status']=='warn' and (collision['interference']['interference_count'] or 0)>0 and not collision['interference']['errors'] \
@@ -435,30 +463,49 @@ def native_snapshot(model,light=False,contacts=False):
     for feature,_ in iter_feature_tree(model):
         if str(member(feature,'Name')).endswith('_travel_limit'):
             data=member(feature,'GetDefinition')
-            result['limits'][str(member(feature,'Name'))]={'advanced':bool(member(data,'IsAdvancedMate')),'minimum_mm':float(member(data,'MinimumDistance'))*1000,'maximum_mm':float(member(data,'MaximumDistance'))*1000}
+            result['limits'][str(member(feature,'Name'))]={'advanced':bool(member(data,'IsAdvancedMate')),'distance_mm':float(member(data,'Distance'))*1000,'minimum_mm':float(member(data,'MinimumDistance'))*1000,'maximum_mm':float(member(data,'MaximumDistance'))*1000}
     if contacts: result['coincidence']=inspect_interference(model,treat_coincidence_as_interference=True)
     return result
 
 
-def move_slider(model,components,sw,role,z):
-    """@brief 仅通过求解器移动，保留实际请求/回读，禁止退回矩阵模拟运动。"""
-    from scripts.sw_connect import get_com_member as member
-    from scripts.sw_assembly import create_math_transform
+def move_slider(model,components,sw,role,z,persist_mate=False,inject_fault=False):
+    """@brief 真实求解请求及限位 Mate 当前值持久化；所有工况仍验证重建后的实际位姿。
+
+    @details 修改 Distance 可自动扩界，正常入口只接受固化规格内工况；故障入口显式保留真实扩界和穿透证据。
+    不把此静态工况控制宣称为自由拖动或接触动力学，不直接写 Transform2 模拟配合。
+    """
+    from scripts.sw_connect import get_com_member as member,create_empty_dispatch_variant
+    from scripts.sw_assembly import create_math_transform,iter_feature_tree
+    spec=load_spec();low,mid,high=spec['travel_mm'][role]
+    if persist_mate and not inject_fault and not low<=z<=high:raise ValueError('正常工况禁止越出固化行程')
     c=components[role]; target=list(member(member(c,'Transform2'),'ArrayData')); target[11]=z/1000
     t=create_math_transform(sw,target); readback=list(member(t,'ArrayData'))
-    success=bool(member(c,'SetTransformAndSolve2',t)); rebuild=bool(member(model,'ForceRebuild3',False))
+    success=bool(member(c,'SetTransformAndSolve2',t));update={}
+    if persist_mate:
+        wanted=next(m for m in mate_contract(spec) if m['name']==role+'_travel_limit')
+        feature=next(f for f,_ in iter_feature_tree(model) if member(f,'Name')==wanted['name'])
+        reference=float(member(member(components[wanted['roles'][1]],'Transform2'),'ArrayData')[11])*1000
+        data=member(feature,'GetDefinition');data.Distance=(z-reference)/1000
+        data.MinimumDistance=wanted['minimum_mm']/1000;data.MaximumDistance=wanted['maximum_mm']/1000;data.IsAdvancedMate=True
+        modified=bool(member(feature,'ModifyDefinition',data,model,create_empty_dispatch_variant()))
+        current=member(feature,'GetDefinition')
+        update={'modified':modified,'reference_origin_mm':reference,'advanced':bool(member(current,'IsAdvancedMate')),
+            'distance_mm':float(member(current,'Distance'))*1000,'minimum_mm':float(member(current,'MinimumDistance'))*1000,'maximum_mm':float(member(current,'MaximumDistance'))*1000}
+        success &= modified
+    rebuild=bool(member(model,'ForceRebuild3',False))
     return {'role':role,'requested_mm':z,'requested_transform':target,'request_readback':readback,
-        'solver_success':success and rebuild,'actual_transform':list(member(member(c,'Transform2'),'ArrayData'))}
+        'positioning_method':'native_limit_mate_current_distance' if persist_mate else 'native_transform_request_no_parameter_commit',
+        'mate_update':update,'solver_success':success and rebuild,'actual_transform':list(member(member(c,'Transform2'),'ArrayData'))}
 
 
 def travel_checks(model,components,sw,spec):
     """@brief 九个真实组合；每个工况独立重建、读配合、计算穿透及有意接触。"""
     rows=[]
     for left,right in itertools.product(spec['travel_mm']['slider_left'],spec['travel_mm']['slider_right']):
-        requests=[move_slider(model,components,sw,'slider_left',left),move_slider(model,components,sw,'slider_right',right)]
+        requests=[move_slider(model,components,sw,'slider_left',left,True),move_slider(model,components,sw,'slider_right',right,True)]
         row={'left_mm':left,'right_mm':right,'requests':requests,'solver_success':all(r['solver_success'] for r in requests),'snapshot':native_snapshot(model,light=True,contacts=True)}
         rows.append(row); print(f'行程工况: left={left}, right={right}, 原生穿透={row["snapshot"]["interference"]["interference_count"]}',flush=True)
-    move_slider(model,components,sw,'slider_left',-40); move_slider(model,components,sw,'slider_right',22)
+    move_slider(model,components,sw,'slider_left',-40,True); move_slider(model,components,sw,'slider_right',22,True)
     return rows
 
 
@@ -468,25 +515,30 @@ def fault_controls(model,components,sw,spec):
     from win32com.client import VARIANT
     from scripts.sw_connect import get_com_member as member
     from scripts.sw_assembly import iter_feature_tree
-    result={'overtravel':[]}
+    result={'overtravel':[],'physical_overtravel':[]}
     for role,bounds in spec['travel_mm'].items():
         for target in (bounds[0]-2,bounds[-1]+2):
             row=move_slider(model,components,sw,role,target); row['actual_mm']=row['actual_transform'][11]*1000
             row['within_bounds']=bounds[0]-.001<=row['actual_mm']<=bounds[-1]+.001
             row['snapshot']=native_snapshot(model,light=True)
-            result['overtravel'].append(row); move_slider(model,components,sw,role,bounds[1])
+            result['overtravel'].append(row); move_slider(model,components,sw,role,bounds[1],True)
+            request=move_slider(model,components,sw,role,target,True,True)
+            physical={'request':request,'snapshot':native_snapshot(model,light=True)}
+            restored=move_slider(model,components,sw,role,bounds[1],True)
+            physical['restored']=restored['solver_success'] and near(restored['actual_transform'][11]*1000,bounds[1],.001)
+            result['physical_overtravel'].append(physical)
     feature=next(f for f,_ in iter_feature_tree(model) if member(f,'Name')=='slider_left_travel_limit')
     empty=VARIANT(pythoncom.VT_EMPTY,None)
     if not feature.SetSuppression2(0,1,empty): raise RuntimeError('限位 Mate 抑制失败')
     try:
         member(model,'ForceRebuild3',False); suppressed=native_snapshot(model,light=True)
-        request=move_slider(model,components,sw,'slider_left',-3)
-        collision={'request':request,'snapshot':native_snapshot(model,light=True)}
-        restore=move_slider(model,components,sw,'slider_left',-40)
-        collision['restored']=restore['solver_success'] and near(restore['actual_transform'][11],-.04,1e-7)
     finally:
         if not feature.SetSuppression2(1,1,empty): raise RuntimeError('限位 Mate 恢复失败')
         member(model,'ForceRebuild3',False)
+    request=move_slider(model,components,sw,'slider_left',-3,True,True)
+    collision={'request':request,'snapshot':native_snapshot(model,light=True)}
+    restore=move_slider(model,components,sw,'slider_left',-40,True)
+    collision['restored']=restore['solver_success'] and near(restore['actual_transform'][11],-.04,1e-7)
     result.update(collision=collision,suppressed_mate={'snapshot':suppressed,'restored':member(feature,'IsSuppressed') is False})
     return result
 
@@ -503,7 +555,9 @@ def run_cad(output,report):
     from apps.desktop.cad_workbench.engineering_orchestrator import build_engineering_plan
     s=load_spec(); write_json(output/'spec.json',s)
     plan=build_engineering_plan('夹爪机械保持、公差及九组合行程；原生装配、BOM、STEP；排除驱动、同步、Motion 和载荷').to_dict()
-    plan['execution_scope']={'core_scope':'terminal_adaptation_only','manufacturing_release':False}; write_json(output/'engineering_plan.json',plan)
+    plan['execution_scope']={'core_scope':'terminal_adaptation_only','manufacturing_release':False,
+        'implemented':['native_parts','native_mates','nine_static_states','BOM','STEP','review'],
+        'excluded':['自由拖动认证','接触动力学','同步运动','驱动','载荷','Motion Study']}; write_json(output/'engineering_plan.json',plan)
     prior=solidworks_processes(); report['processes_before']=prior
     if prior is None or prior: raise RuntimeError('BLOCKED: 已有或未知 SolidWorks 进程，保留用户实例')
     session=None; model=None; components={}; pid=None; owned=False; pythoncom.CoInitialize()

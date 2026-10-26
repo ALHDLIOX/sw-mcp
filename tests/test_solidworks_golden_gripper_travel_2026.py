@@ -23,7 +23,8 @@ def snapshot(output,left=-40,right=22):
     for m in case.mate_contract(spec):
         mates.append({'name':m['name'],'type':m['type'],'suppressed':False,'health':{'health_status':'healthy'},
             'entities':[{'role':r,'component_id':ids[r],'reference_present':True,'entity_params':[0,0,1]} for r in m['roles']]})
-        if 'minimum_mm' in m: limits[m['name']]={'advanced':True,'minimum_mm':m['minimum_mm'],'maximum_mm':m['maximum_mm']}
+        if 'minimum_mm' in m: limits[m['name']]={'advanced':True,'minimum_mm':m['minimum_mm'],'maximum_mm':m['maximum_mm'],
+            'distance_mm':(poses[m['roles'][0]][11]-poses[m['roles'][1]][11])*1000}
     bom=[{'item':index,'file':str(output/'parts'/(name+'.SLDPRT')),'quantity':sum(i['part']==name for i in spec['instances'].values()),
           'part_number':'P021-'+name.upper(),'description':case.description(name,spec),'material':p['material'],'excluded_from_bom':False}
          for index,(name,p) in enumerate(spec['parts'].items(),1)]
@@ -43,11 +44,16 @@ def snapshot(output,left=-40,right=22):
             'items':[{'volume_mm3':0,'components':[{'name':a},{'name':b}]} for a,b in pairs]}}
 
 
-def request(role,target,actual=None):
+def request(role,target,actual=None,persist=True):
     """@brief 合成请求保留原始位姿，故障测试会故意破坏这些字段。"""
     t=case.transform(case.load_spec()['instances'][role],target); a=list(t)
     if actual is not None:a[11]=actual/1000
-    return {'role':role,'requested_mm':target,'requested_transform':t,'request_readback':list(t),'solver_success':True,'actual_transform':a}
+    wanted=next(m for m in case.mate_contract() if m['name']==role+'_travel_limit')
+    reference=case.load_spec()['instances'][wanted['roles'][1]]['translation_mm'][2];distance=target-reference
+    return {'role':role,'requested_mm':target,'requested_transform':t,'request_readback':list(t),'solver_success':True,'actual_transform':a,
+        'positioning_method':'native_limit_mate_current_distance' if persist else 'native_transform_request_no_parameter_commit',
+        'mate_update':{'modified':True,'advanced':True,'reference_origin_mm':reference,'distance_mm':distance,
+            'minimum_mm':min(wanted['minimum_mm'],distance),'maximum_mm':max(wanted['maximum_mm'],distance)} if persist else {}}
 
 
 def report_fixture(output,pid=1234,seal=False):
@@ -72,11 +78,16 @@ def report_fixture(output,pid=1234,seal=False):
     for left,right in itertools.product(spec['travel_mm']['slider_left'],spec['travel_mm']['slider_right']):
         report['travel_report'].append({'left_mm':left,'right_mm':right,'solver_success':True,
             'requests':[request('slider_left',left),request('slider_right',right)],'snapshot':snapshot(output,left,right)})
-    controls={'overtravel':[]}
+    controls={'overtravel':[],'physical_overtravel':[]}
     for role,b in spec['travel_mm'].items():
         for target,actual in ((b[0]-2,b[0]),(b[-1]+2,b[-1])):
-            r=request(role,target,actual); r['actual_mm']=actual; r['within_bounds']=True
+            r=request(role,target,actual,persist=False); r['actual_mm']=actual; r['within_bounds']=True
             r['snapshot']=snapshot(output,actual if role=='slider_left' else -40,actual if role=='slider_right' else 22); controls['overtravel'].append(r)
+            physical=snapshot(output,target if role=='slider_left' else -40,target if role=='slider_right' else 22)
+            req=request(role,target);physical['limits'][role+'_travel_limit'].update({k:req['mate_update'][k] for k in ('minimum_mm','maximum_mm')})
+            stop=('support_left' if target<-58 else 'base') if role=='slider_left' else ('base' if target<4 else 'support_right')
+            physical['interference']={'status':'warn','errors':[],'interference_count':1,'items':[{'volume_mm3':100,'components':[{'name':role},{'name':stop}]}]}
+            controls['physical_overtravel'].append({'request':req,'snapshot':physical,'restored':True})
     suppressed=copy.deepcopy(native); next(m for m in suppressed['mates']['mates'] if m['name']=='slider_left_travel_limit')['suppressed']=True
     collision=copy.deepcopy(suppressed);collision['interference']={'status':'warn','errors':[],'interference_count':1,
         'items':[{'volume_mm3':100,'components':[{'name':'base'},{'name':'slider_left'}]}]}
@@ -112,7 +123,8 @@ def test_p021_contract_and_expected_manual_gate(tmp_path):
 
 @pytest.mark.parametrize('fault',['missing_limit','wrong_stroke','mate_failed','missing_endplate','wrong_clearance','missing_center_stop','collision',
     'unknown_interference','lost_intended_contact','fake_zero_contact','cached_request','actual_overtravel','unknown_limit','wrong_pin_position',
-    'wrong_bom','step_mismatch','cleanup','review_warn','review_fail','masked_collision_control','masked_suppression_control','stale_material','wrong_density'])
+    'wrong_bom','step_mismatch','cleanup','review_warn','review_fail','masked_collision_control','masked_suppression_control','stale_material','wrong_density','rivet_opposite_side',
+    'nominal_limit_expanded','missing_physical_overtravel','wrong_physical_stop'])
 def test_p021_rejects_faults(tmp_path,fault):
     r=report_fixture(tmp_path/'offline'); row=r['travel_report'][0]; snap=row['snapshot']
     if fault=='missing_limit':snap['mates']['mates'].pop()
@@ -129,11 +141,15 @@ def test_p021_rejects_faults(tmp_path,fault):
     elif fault=='actual_overtravel':r['native_fault_controls']['overtravel'][0]['actual_transform'][11]=-.06
     elif fault=='unknown_limit':next(iter(snap['limits'].values()))['advanced']=False
     elif fault=='wrong_pin_position':next(c for c in snap['components'] if c['role']=='finger_pin_left_a')['transform'][9]+=.01
+    elif fault=='rivet_opposite_side':next(c for c in snap['components'] if c['role']=='finger_pin_left_a')['transform'][11]-=.018
     elif fault=='wrong_bom':r['reopened']['bom'][0]['quantity']+=1
     elif fault=='step_mismatch':r['step_reopened']['bodies'][0]['volume_mm3']+=1
     elif fault=='cleanup':r['cleanup']['status']='failed'
     elif fault=='stale_material':r['parts']['rod']['reopened']['material']['name']='6061-T6 (SS)'
     elif fault=='wrong_density':r['parts']['rod']['reopened']['mass']['density_kg_m3']=1000
+    elif fault=='nominal_limit_expanded':snap['limits']['slider_left_travel_limit']['maximum_mm']+=2
+    elif fault=='missing_physical_overtravel':r['native_fault_controls']['physical_overtravel'].pop()
+    elif fault=='wrong_physical_stop':r['native_fault_controls']['physical_overtravel'][0]['snapshot']['interference']['items'][0]['components'][1]['name']='finger_right'
     elif fault.startswith('review_'):r['review']['evaluation']['status']=fault.split('_')[1]
     elif fault=='masked_collision_control':r['native_fault_controls']['collision']['snapshot']['interference']['interference_count']=0
     else:next(m for m in r['native_fault_controls']['suppressed_mate']['snapshot']['mates']['mates'] if m['name']=='slider_left_travel_limit')['suppressed']=False
