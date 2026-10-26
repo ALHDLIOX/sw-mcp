@@ -57,7 +57,7 @@ def report_fixture(output,pid=1234,seal=False):
         contract=case.part_contract(name,spec); bosses=len(p.get('bosses',[])) or (3 if 'head_diameter' in p else 1)
         cuts=sum(k in p for k in ('guide','tie','finger_holes','mount'))
         snap={'body_count':1,'neutral':{'bodies':[contract],'errors':[]},'geometry':{'envelope_mm':dict(zip(('length','width','height'),contract['size_mm']))},
-            'mass':{'errors':[],'density_kg_m3':2700},'thickness_mm':p.get('length',p.get('size',[0,0,0])[2]),'material':{'name':p['material'],'database':'OFFLINE'},
+            'mass':{'errors':[],'density_kg_m3':p['density_kg_m3']},'thickness_mm':p.get('length',p.get('size',[0,0,0])[2]),'material':{'name':p['material'],'database':'OFFLINE'},
             'sketch_quality':{'status':'pass','sketches':[{}]*(bosses+cuts)},'features':{'features':[{'type':'Boss'}]*bosses+[{'type':'Cut'}]*cuts},
             'planes':[{'axis':2,'coordinate_mm':z} for z in (54,62)]}
         parts[name]={'built':copy.deepcopy(snap),'reopened':copy.deepcopy(snap)}
@@ -112,7 +112,7 @@ def test_p021_contract_and_expected_manual_gate(tmp_path):
 
 @pytest.mark.parametrize('fault',['missing_limit','wrong_stroke','mate_failed','missing_endplate','wrong_clearance','missing_center_stop','collision',
     'unknown_interference','lost_intended_contact','fake_zero_contact','cached_request','actual_overtravel','unknown_limit','wrong_pin_position',
-    'wrong_bom','step_mismatch','cleanup','review_warn','review_fail','masked_collision_control','masked_suppression_control'])
+    'wrong_bom','step_mismatch','cleanup','review_warn','review_fail','masked_collision_control','masked_suppression_control','stale_material','wrong_density'])
 def test_p021_rejects_faults(tmp_path,fault):
     r=report_fixture(tmp_path/'offline'); row=r['travel_report'][0]; snap=row['snapshot']
     if fault=='missing_limit':snap['mates']['mates'].pop()
@@ -132,6 +132,8 @@ def test_p021_rejects_faults(tmp_path,fault):
     elif fault=='wrong_bom':r['reopened']['bom'][0]['quantity']+=1
     elif fault=='step_mismatch':r['step_reopened']['bodies'][0]['volume_mm3']+=1
     elif fault=='cleanup':r['cleanup']['status']='failed'
+    elif fault=='stale_material':r['parts']['rod']['reopened']['material']['name']='6061-T6 (SS)'
+    elif fault=='wrong_density':r['parts']['rod']['reopened']['mass']['density_kg_m3']=1000
     elif fault.startswith('review_'):r['review']['evaluation']['status']=fault.split('_')[1]
     elif fault=='masked_collision_control':r['native_fault_controls']['collision']['snapshot']['interference']['interference_count']=0
     else:next(m for m in r['native_fault_controls']['suppressed_mate']['snapshot']['mates']['mates'] if m['name']=='slider_left_travel_limit')['suppressed']=False

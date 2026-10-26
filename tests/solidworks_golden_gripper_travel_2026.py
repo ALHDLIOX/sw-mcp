@@ -103,7 +103,7 @@ def validate_part(snap,name,spec=None):
         'dimensions':all(near(snap['geometry'].get('envelope_mm',{}).get(k),v,.01) for k,v in zip(('length','width','height'),contract['size_mm'])),
         'editable_depth':near(snap['thickness_mm'],p.get('length',p.get('size',[0,0,0])[2]),.01),
         'material':snap['material']['name']==p['material'] and bool(snap['material']['database']),
-        'mass_readable':not snap['mass'].get('errors') and (snap['mass'].get('density_kg_m3') or 0)>2000,
+        'mass_readable':not snap['mass'].get('errors') and near(snap['mass'].get('density_kg_m3'),p['density_kg_m3'],1),
         'sketches':snap['sketch_quality']['status']=='pass' and len(snap['sketch_quality']['sketches'])==boss_count+cuts,
         'features':sum(t in ('Boss','Extrusion') for t in types)==boss_count and types.count('Cut')==cuts,
         'health':not any(snap['features'].get(k) for k in ('feature_error','faulty_features','warning_features','unknown_feature_health'))}
@@ -362,7 +362,10 @@ def create_parts(session,output,report,spec):
             snap=snapshot_model(model,bosses[0]); snap['neutral']=previous.neutral_snapshot(model)
             snap['validation']=validate_part(snap,name,spec); report['parts'][name][stage]=snap
             write_json(output/'parts.json',report['parts'])
-            if snap['validation']['status']!='pass': raise RuntimeError('零件几何失败: '+name+' '+str(snap['validation']))
+            if snap['validation']['status']!='pass':
+                failed=output/'failures'/f'{name}_{stage}.SLDPRT';failed.parent.mkdir(exist_ok=True)
+                if not failed.exists(): session.save(model=model,file_path=str(failed))
+                raise RuntimeError('零件几何失败: '+name+' '+str(snap['validation']))
             if stage=='built':
                 path=output/'parts'/f'{name}.SLDPRT'
                 if path.exists() or not session.save(model=model,file_path=str(path)): raise RuntimeError('零件保存失败')
