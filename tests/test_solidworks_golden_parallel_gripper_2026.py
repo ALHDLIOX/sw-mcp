@@ -254,3 +254,15 @@ def test_cached_success_cannot_replace_actual_six_axis_request(tmp_path):
     assert case.motion_evidence_valid(probes,case.load_spec())
     probes[2]['transform_readback']=probes[2]['before']['slider_left']
     assert not case.motion_evidence_valid(probes,case.load_spec())
+
+
+def test_projection_may_slide_z_but_cannot_admit_rotation(tmp_path):
+    """@brief 回归真实求解器投影：允许自由轴移动，严格拒绝已发现的额外绕 Z 转动。"""
+    report=synthetic_report(tmp_path/'offline')
+    probes=report['motion_probes']
+    ry=next(p for p in probes if p['role']=='slider_left' and p['mode']=='ry')
+    for role in ('slider_left','finger_left'): ry['after'][role][11]-=.0009
+    assert case.motion_evidence_valid(probes,case.load_spec())
+    rz=next(p for p in probes if p['role']=='slider_left' and p['mode']=='rz')
+    for role in ('slider_left','finger_left'): rz['after'][role][:9]=[.99875026,-.04997917,0,.04997917,.99875026,0,0,0,1]
+    assert not case.motion_evidence_valid(probes,case.load_spec())

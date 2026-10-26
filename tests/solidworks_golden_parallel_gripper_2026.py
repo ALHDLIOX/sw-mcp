@@ -40,18 +40,22 @@ def part_properties(part):
 
 
 def mate_contract():
-    """@brief 18 个真实 Mate 的类型、关联实例和语义；自由滑动不增加轴向定位 Mate。"""
+    """@brief 22 个真实 Mate；双导杆各自参与滑块同心约束，不依赖 LockRotation 隐式锁角。"""
     result=[]
     for role,other in [('support_left','base'),('support_right','base'),('finger_left','slider_left'),('finger_right','slider_right')]:
         for plane in ('Right Plane','Top Plane','Front Plane'):
             distance=128 if role=='support_right' and plane=='Front Plane' else 0
             result.append({'name':role+'_'+plane.split()[0], 'roles':[role,other], 'type':5 if distance else 0,
-                           'plane':plane,'distance_mm':distance})
+                           'plane':plane,'distance_mm':distance,'flip':bool(distance)})
     for role in ('rod_left','rod_right'):
-        result.extend([{'name':role+'_guide','roles':[role,'support_left'],'type':1,'lock_rotation':True},
-                       {'name':role+'_axial','roles':[role,'base'],'type':0,'plane':'Front Plane','distance_mm':0}])
+        result.extend([{'name':role+'_guide','roles':[role,'support_left'],'type':1,'lock_rotation':False,
+                        'left_cylinder_x_mm':0,'right_cylinder_x_mm':-18 if role.endswith('left') else 18},
+                       {'name':role+'_axial','roles':[role,'base'],'type':0,'plane':'Front Plane','distance_mm':0},
+                       {'name':role+'_clock','roles':[role,'base'],'type':3,'plane':'Top Plane','distance_mm':0}])
     for role in ('slider_left','slider_right'):
-        result.append({'name':role+'_guide','roles':[role,'rod_left'],'type':1,'lock_rotation':True})
+        for suffix,rod,x in (('guide','rod_left',-18),('guide_right','rod_right',18)):
+            result.append({'name':role+'_'+suffix,'roles':[role,rod],'type':1,'lock_rotation':False,
+                           'left_cylinder_x_mm':x,'right_cylinder_x_mm':0})
     return result
 
 
@@ -166,7 +170,7 @@ def validate_native(snapshot,spec):
             and actual.get('health',{}).get('health_status')=='healthy' and len(entities)==2 \
             and {e['role'] for e in entities}==set(wanted['roles']) \
             and all(e.get('reference_present') is True and bool(e.get('entity_params')) and e.get('component_id')==ids.get(e['role']) for e in entities) \
-            and (wanted['type']!=1 or actual.get('lock_rotation') is True)
+            and (wanted['type']!=1 or actual.get('lock_rotation') is wanted['lock_rotation'])
     return {'status':'pass' if all(checks.values()) else 'fail','checks':checks}
 
 
@@ -234,7 +238,13 @@ def motion_evidence_valid(probes,spec):
         for role,instance in spec['instances'].items():
             initial=[1,0,0,0,1,0,0,0,1,*[v/1000 for v in instance['translation_mm']],1,0,0,0]
             target=list(initial)
-            if axial and role in (p['role'],p['role'].replace('slider','finger')): target[11]+=(-1 if p['mode']=='tz_negative' else 1)*spec['motion_probe_mm']/1000
+            active=role in (p['role'],p['role'].replace('slider','finger'))
+            if axial and active: target[11]+=(-1 if p['mode']=='tz_negative' else 1)*spec['motion_probe_mm']/1000
+            if not axial and active:
+                # 求解器可把被约束方向的请求投影到自由 Z 轴，旋转和横向偏移仍必须完全受限。
+                z=p['after'][p['role']][11]
+                if not near(z,initial[11],spec['motion_probe_mm']/1000): return False
+                target[11]=z
             for key,wanted in (('before',initial),('after',target),('end',initial)):
                 actual=p.get(key,{}).get(role,[])
                 if len(actual)!=16 or not all(near(a,b,1e-7) for a,b in zip(actual,wanted)): return False
@@ -410,11 +420,12 @@ def create_assembly(session,output,report,spec):
     for wanted in mate_contract():
         left,right=wanted['roles']
         if wanted['type']==1:
-            entities=[cylinder(left,0 if left.startswith('rod') else -18),cylinder(right,(-18 if left.endswith('left') else 18) if right=='support_left' else 0)]
+            entities=[cylinder(left,wanted['left_cylinder_x_mm']),cylinder(right,wanted['right_cylinder_x_mm'])]
         else: entities=[get_component_feature_entity(components[r],wanted['plane']) for r in (left,right)]
         before={str(member(f,'Name')) for f,_ in iter_feature_tree(model)}
         select_entities_for_mate(model,*entities)
-        mate=add_mate5_checked(model,wanted['type'],distance=wanted.get('distance_mm',0)/1000,lock_rotation=wanted.get('lock_rotation',False))
+        mate=add_mate5_checked(model,wanted['type'],distance=wanted.get('distance_mm',0)/1000,
+            flip=wanted.get('flip',False),lock_rotation=wanted.get('lock_rotation',False))
         if mate is None: raise RuntimeError('Mate 返回空')
         added=[f for f,_ in iter_feature_tree(model) if str(member(f,'Name')) not in before and str(member(f,'GetTypeName2')).startswith('Mate') and member(f,'GetTypeName2')!='MateGroup']
         if len(added)!=1: raise RuntimeError('无法唯一关联新 Mate 特征')

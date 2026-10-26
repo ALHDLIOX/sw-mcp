@@ -35,17 +35,18 @@ P0-1.2 的安装板验收范围、生产 Review 和 Execution Core 安全门禁�
 底座固定，其它组件不使用 Fixed 属性代替 Mate：
 
 - 两个支撑各 3 个基准面 Mate；右端轴向距离为 128，其余对应基准重合。
-- 两根导杆各 1 个锁旋转的同心 Mate（对应左支撑孔）及 1 个轴向基准重合 Mate。
-- 两个滑块各 1 个锁旋转同心 Mate，保留沿 Z 的轴向移动；第二导杆穿过第二孔，真实 B-Rep 检查其位置和间隙。
+- 两根导杆各 1 个同心 Mate（对应左支撑孔）、1 个轴向基准重合 Mate 和 1 个角向平行 Mate。
+- 两个滑块各与两根导杆建立同心 Mate；两条不同轴的同心约束共同限制转动，只保留沿 Z 的轴向移动。
 - 每个手指与对应滑块建立 3 个基准面重合 Mate。
 
-共 18 个真实 Mate。初始变换只用于插入定位；验收回读 MateGroup、Mate2 类型、抑制/健康、MateEntity2
+共 22 个真实 Mate。初始变换只用于插入定位；验收回读 MateGroup、Mate2 类型、抑制/健康、MateEntity2
 关联组件 ID 和实体参数，并回读组件变换、固定状态、约束状态和实例唯一 ID。
 
-GetConstrainedStatus 只能证明整体约束状态，不能单独证明自由度数。目标自由度通过实际同心 Mate 的
-LockRotation、关联实体轴线、手指的刚性平面 Mate、静态件完全约束状态，以及原生 SetTransformAndSolve2
+GetConstrainedStatus 只能证明整体约束状态，不能单独证明自由度数。目标自由度通过实际双导杆同心 Mate 的
+两条关联轴线、手指的刚性平面 Mate、静态件完全约束状态，以及原生 SetTransformAndSolve2
 六轴探针联合证明。两个滑块各执行 Z 正负移动 2 mm、X/Y 平移和 X/Y/Z 旋转请求，共 14 项；
 只允许 Z 平移且手指跟随，另一组及静态件不得变化，其它五个方向必须被约束，逐次恢复。
+被约束方向的请求可被原生求解器投影为已验证范围内的 Z 滑动，但横向偏移和旋转仍必须为零。
 每次请求都用 SAFEARRAY(double) 创建 MathTransform 并回读全部 16 项，不把无效 ArrayData 写入当作请求成功。
 测试运动不会退回直接 Transform2 赋值；无法读取或证明时验收失败，不以视觉代替证明。
 
@@ -111,6 +112,12 @@ P0-1.2 安全配置阻塞保持原状，本阶段没有变更 Runner、Environme
 3. 同轮暴露 GetRemainingDOFs 返回值/状态不可按原假设解释，以及空 BOM 属性导致 CSV 只有 765 字节、
    通用 Review 出现 WARN。修复方向分别为原生六轴探针与明确 SDK 诊断范围，以及保存真实编号、材料和
    尺寸/孔位/功能属性；没有修改生产 Review，没有把 WARN 改写为 PASS。
+4. 装配诊断 probe-02 的 MathUtility 带参方法被 pywin32 绑定为属性，触发成员不存在；改为显式
+   _FlagAsMethod 后，无文档的真实 API 最小探针回读了正确 16 项变换，清理通过。初版辅助诊断脚本未把
+   失败映射到非零退出码，随后修复；该脚本不属于 Golden 入口，诊断失败从未计入验收通过。
+5. probe-03（PID 40144）原生 Review PASS/100、零干涉，但右支撑位于错误的负向距离，且单一同心
+   Mate 即使回读 LockRotation=true，原生旋转探针仍能使滑块转动，验收按预期失败。增加第二导杆同心
+   Mate、固定导杆的显式角向 Mate，并修正距离方向；不把相应检查删除。原始失败 SLDASM/STEP 和预览保留。
 
 后续装配 API 诊断可复用上述真实零件文件，但必须标记 native_assembly_diagnostic_only，
 不属于从零建模的独立 Golden 轮次，也不计入连续五轮成功率。
