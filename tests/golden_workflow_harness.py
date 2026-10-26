@@ -230,7 +230,14 @@ def main(case,argv=None):
     args=parser.parse_args(argv)
     if args.expected_terminal=='blocked' and args.runs!=5: parser.error('预期 blocked 必须五轮')
     args.output.mkdir(parents=True,exist_ok=False)
-    reports=[run_once(case,args.output/f'run-{i:02d}',args.expected_terminal,args.runtime_config) for i in range(1,args.runs+1)]
+    reports=[]
+    for i in range(1,args.runs+1):
+        report=run_once(case,args.output/f'run-{i:02d}',args.expected_terminal,args.runtime_config)
+        reports.append(report)
+        # 包括异常清理在内的失败发生后不再启动实例；不足五轮的套件仍明确失败。
+        current=verdict(case,report,args.expected_terminal,inspect_evidence(case,Path(report['output_dir']),report))
+        if current['acceptance_status']!='passed':
+            break
     result=summarize(case,reports,args.expected_terminal)
     write_json(args.output/'summary.json',result)
     print(json.dumps(result,ensure_ascii=False,indent=2),flush=True)

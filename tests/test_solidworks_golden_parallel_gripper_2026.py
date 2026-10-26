@@ -266,3 +266,16 @@ def test_projection_may_slide_z_but_cannot_admit_rotation(tmp_path):
     rz=next(p for p in probes if p['role']=='slider_left' and p['mode']=='rz')
     for role in ('slider_left','finger_left'): rz['after'][role][:9]=[.99875026,-.04997917,0,.04997917,.99875026,0,0,0,1]
     assert not case.motion_evidence_valid(probes,case.load_spec())
+
+
+def test_suite_does_not_launch_another_instance_after_cleanup_failure(tmp_path,monkeypatch):
+    """@brief 即使缓存验收写着 passed，异常清理也必须停止后续实例启动。"""
+    calls=[]
+    def failed_case(_case,output,*args):
+        calls.append(output)
+        report=evidence_fixture(output)
+        report['cleanup']['status']='failed'
+        return report
+    monkeypatch.setattr(harness,'run_once',failed_case)
+    assert case.main(['--output',str(tmp_path/'suite'),'--runs','5','--expected-terminal','blocked'])==1
+    assert len(calls)==1
