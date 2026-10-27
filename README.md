@@ -172,11 +172,12 @@ Artifacts + Evidence
 
 ## Reliability
 
-V2 附带 **37 个 deterministic reliability scenarios**，覆盖正常执行、故障注入、后端回退、能力缺口与策略门禁。
+当前附带 **43 个 deterministic reliability scenarios**（12 nominal + 31 robustness），
+覆盖正常执行、故障注入、后端回退、能力缺口与策略门禁；由 `golden-workflows.yaml` 的 12 个 workflow 派生。
 
 | Metric | Current baseline |
 |---|---|
-| Nominal workflow | 10/10 first-pass（基线 v3，warning 等待人工复核） |
+| Nominal workflow | 12/12 first-pass（baseline v4，warning 归 guardrail，等待人工复核） |
 | Injected false-completion cases | all detected |
 | Escaped false completion | 0 in current deterministic benchmark |
 | Regression suite | 当前方案 B 验证记录见 [可靠性修复与验收](docs/architecture/scheme-b-reliability.md) |

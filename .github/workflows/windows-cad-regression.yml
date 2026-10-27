@@ -6,6 +6,23 @@ on:
       reason:
         description: "审批人可复核的真机运行原因"
         required: true
+      golden_case:
+        description: "Golden 用例。单次只跑一个，避免多用例 matrix 撞上 45 分钟超时"
+        type: choice
+        default: mounting_bracket
+        options:
+          - mounting_bracket
+          - parallel_gripper_assembly
+          - parallel_gripper_retention_travel
+      runs:
+        description: "独立运行轮数。5 = 正式验收（预期终态 blocked）；1-4 = 冒烟（预期终态 completed，非正式证据）"
+        type: choice
+        default: "5"
+        options:
+          - "5"
+          - "3"
+          - "2"
+          - "1"
       run_legacy_regressions:
         description: "同时执行旧版 SolidWorks/AutoCAD 回归（需另装 AutoCAD）"
         type: boolean
@@ -111,9 +128,24 @@ jobs:
       - name: AutoCAD backend preflight
         if: inputs.run_legacy_regressions
         run: python subskills/autocad-automation/scripts/acad_dotnet_preflight.py
-      - name: SolidWorks 2026 Golden mounting bracket (five independent runs)
+      - name: SolidWorks 2026 Golden — formal acceptance (five independent runs)
+        if: inputs.runs == '5'
         shell: pwsh
-        run: python -X utf8 tests/solidworks_golden_workflow.py --case mounting_bracket --output "output/p0-golden-${{ github.run_id }}-${{ github.run_attempt }}" --runs 5 --expected-terminal blocked
+        run: >-
+          python -X utf8 tests/solidworks_golden_workflow.py
+          --case "${{ inputs.golden_case }}"
+          --output "output/p0-golden-${{ inputs.golden_case }}-${{ github.run_id }}-${{ github.run_attempt }}"
+          --runs 5 --expected-terminal blocked
+      # @brief 冒烟模式：轮数不足 5 时无法满足 blocked 终态的语义（harness 会拒绝），
+      #        故只断言"能跑到 completed"。此模式**不产生正式验收证据**。
+      - name: SolidWorks 2026 Golden — smoke run (NOT formal acceptance)
+        if: inputs.runs != '5'
+        shell: pwsh
+        run: >-
+          python -X utf8 tests/solidworks_golden_workflow.py
+          --case "${{ inputs.golden_case }}"
+          --output "output/p0-golden-smoke-${{ inputs.golden_case }}-${{ github.run_id }}-${{ github.run_attempt }}"
+          --runs "${{ inputs.runs }}" --expected-terminal completed
       - name: Upload CAD regression evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

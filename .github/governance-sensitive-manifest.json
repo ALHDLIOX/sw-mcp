@@ -2,7 +2,7 @@
   "schema": "governance-sensitive-manifest/v1",
   "files": {
     ".github/CODEOWNERS": "8a0367d308c85c1a5c2e06113737d0902ab700470e7a4110b3135f658b867d81",
-    ".github/workflows/windows-cad-regression.yml": "93faf8bcf8b82b65649fd37aa17b9f364ddbb66bcb74f30304750b746d007cbc",
+    ".github/workflows/windows-cad-regression.yml": "8d1476d7e73bf086b9cec5464f9cf92bf4265574020de795d2cb080e290f3fb7",
     ".github/workflows/windows-release.yml": "d63580b28f52a0cfc87d1954da66cf910db88e1dd48719bbf78877f2efd2a0f9",
     "docs/architecture/evidence/governance-ruleset-attestation.json": "bb48a2a6725b54feb29e9ed332529483c61df69d96d53366b77fb31271ca4352",
     "scripts/ci/cad_ci_guard.cjs": "b1d876243c1478ae6d07f703df5819dd1f3efeac43d5a996c2997103183a3fab",
