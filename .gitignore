@@ -67,3 +67,8 @@ desktop.ini
 *.dwg
 output/
 exports/
+
+# 治理证明签名私钥：仅存于维护者本机，任何情况下不得入库
+*.private.pem
+.ed25519-private.pem
+.cad-governance/
