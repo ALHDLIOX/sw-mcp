@@ -225,9 +225,12 @@ False Completion=0，清理成功率 5/5。同一批真实证据在严格 comple
 本机归档包含五轮、历史失败/未封口数据、诊断及离线记录，549 项，26,746,788 字节；未上传远程附件：
 
 ```text
-E:\desktop\sw-skills\p0-real-gripper-travel-2026\output\p0-2-1-evidence-20261027.zip
+output/p0-2-1-evidence-20261027.zip        （相对仓库根目录）
 SHA-256: 16a5e33383dd326d033ef316d4610c450a42676dbaed1758a963f2d612e8f3b4
 ```
+
+> 该 ZIP 未入库（26.7 MB，`.gitignore` 排除 `output/`），只在维护者本机保留。
+> 外部复核者只能验证公开的清单与哈希，**不能独立重放原始证据**。
 
 ZIP CRC、整包 SHA-256、全部清单文件磁盘/归档字节对比均通过；Python 与 PowerShell SHA-256 一致。
 独立复核结果为 `output/p0-2-1-independent-seal-verification.json`，逐文件清单为

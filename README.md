@@ -39,24 +39,63 @@ AI 负责理解意图、查证 API、规划步骤；Execution Core 保证执行�
 
 ---
 
+## Prerequisites
+
+| 项 | 要求 | 检查方法 |
+|---|---|---|
+| 操作系统 | Windows 10/11 x64 | 原生 `SLDPRT` / `SLDASM` / `SLDDRW` 依赖 SolidWorks COM，其他系统仅可用开放格式能力 |
+| Python | 3.10+（本机真机验收使用 3.12） | `python -V` |
+| Node.js | 20+（工作台、MCP 注册与 Skill 安装器） | `node -v` |
+| SolidWorks | 2024 或 2026，需合法许可 | `python scripts/cad_doctor.py` |
+| AutoCAD | 可选，仅 DWG/DXF 子技能需要 | — |
+
+安装 Python 依赖：
+
+```powershell
+python -m pip install -r requirements.txt
+# 只有开放格式（OCCT）能力才需要：
+python -m pip install -r requirements-occt.txt
+```
+
+只读环境自检（不会打开或关闭 CAD）：
+
+```powershell
+python scripts/cad_doctor.py           # 发现的安装路径、版本、COM 注册状态
+python scripts/sw_capability_probe.py  # 类型库与能力清单
+```
+
+模板与材料库**默认自动探测**，不需要写死路径。只有非标准安装位置才需要
+[`config/runtime.example.json`](config/runtime.example.json) 与 `SOLIDWORKS_TYPELIB_DIRS`，
+见 [`config/README.md`](config/README.md)。
+
+---
+
 ## Quick Start
 
 三种入口**任选其一**即可，不需要同时启动。
 
-### Option 1 — Skill（最简单）
+### Option 1 — Skill
 
-```bash
+```powershell
 npx github:wzyn20051216/solidworks-automation-skill
-# 或
-claude skill add https://github.com/wzyn20051216/solidworks-automation-skill
 ```
+
+该命令获取本仓库并执行根目录的 `install.js`（`package.json` 的 `bin` 入口），
+把 Skill 复制到本机**已存在**的 Agent skills 目录之一（`.agents` / `.claude` / `.codex` / `.cursor` / `.openclaw`）。
+安装位置由脚本探测，不写入固定路径。若 `npx` 在当前网络环境不可用，改用下方 Option 2 的克隆方式，
+再执行 `node install.js`。
 
 ### Option 2 — MCP
 
 ```powershell
-npm install -g @smithery/cli
-smithery mcp add wzyn20051216/solidworks-automation-skill --client codex --config '{}'
+git clone https://github.com/wzyn20051216/solidworks-automation-skill.git
+cd solidworks-automation-skill
+python -m pip install -r requirements.txt -r mcp-server/requirements.txt
+node mcp-server/register_all_ai_mcp.js --help          # 查看全部参数
+node mcp-server/register_all_ai_mcp.js --clients codex,claude-code,cursor
 ```
+
+注册脚本会写入对应客户端的 MCP 配置，并在写入前生成 `.bak` 备份；加 `--strict` 可让任一客户端失败时非零退出。
 
 ### Option 3 — CAD Studio 桌面版
 

@@ -238,10 +238,13 @@ python tests/solidworks_golden_workflow.py --case mounting_bracket --output outp
 证据目录：
 
 ```text
-E:\desktop\sw-skills\p0-real-golden-2026\output\p0-12-real-five-01
-E:\desktop\sw-skills\p0-real-golden-2026\output\p0-12-offline
-E:\desktop\sw-skills\p0-real-golden-2026\output\p0-12-evidence-20261023.zip
+<worktree-p0-real-golden-2026>/output/p0-12-real-five-01
+<worktree-p0-real-golden-2026>/output/p0-12-offline
+<worktree-p0-real-golden-2026>/output/p0-12-evidence-20261023.zip
 ```
+
+> 该批证据产生于 P0-1.2 阶段的独立 worktree（`p0-real-golden-2026`），路径随 worktree 所在磁盘位置变化，
+> 故以占位符表示。证据包未入库，只在维护者本机保留。
 
 证据包共 121 个文件（含总哈希清单）；SHA-256：
 
