@@ -174,7 +174,7 @@ references → official API / SDK → alternate backend → minimal implementati
 
 ## 12. Compatibility
 
-- Skill 使用方式、原有 60 个 MCP Tool Name / Input Schema、CLI 命令和 Queue Schema 保持兼容；新增只读产物工具与可选 HTTP 传输；
+- Skill 使用方式、CLI 命令和 Queue Schema 保持兼容；MCP 工具**当前共 61 个**——原有 60 个的名称与完整 Input Schema 保持一致，新增 1 个只读产物工具与可选 HTTP 传输；
 - `capabilities.yaml` 仍唯一真源，`golden-workflows.yaml` 向后兼容；
 - 新增字段全部 additive / optional；
 - 2026-10-08 的方案 B 修复执行事实、草图/阵列和资源生命周期；验收范围为 SolidWorks 2026，详见 [`scheme-b-reliability.md`](scheme-b-reliability.md)。

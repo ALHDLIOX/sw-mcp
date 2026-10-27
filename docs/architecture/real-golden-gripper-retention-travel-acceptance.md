@@ -96,10 +96,12 @@ $env:PYTHONUTF8 = '1'
 python -m pytest -q -rs
 python tests/evals/runner.py --output-dir output/p0-2-1-eval-unique
 node --test tests/test_cad_ci_guard.cjs
-python tests/solidworks_golden_workflow.py --case parallel_gripper_retention_travel --output output/p0-2-1-real-unique --runs 5 --expected-terminal blocked --runtime-config output/runtime.json
+python tests/solidworks_golden_workflow.py --case parallel_gripper_retention_travel --output output/p0-2-1-real-unique --runs 5 --expected-terminal blocked --runtime-config config/runtime.example.json
 ```
 
-受控 runtime.json 只允许现有模板、材料库路径和有界超时。执行前环境诊断、已有进程拒绝、每轮独立目录/UUID trace、
+受控 runtime 配置只允许现有模板、材料库路径和有界超时。`config/runtime.example.json` 是入库的可移植模板
+（路径为 `null` 时自动探测）；正式验收当时使用的是本机 `output/p0-2-1-runtime.json`（含本机绝对路径，未入库）。
+执行前环境诊断、已有进程拒绝、每轮独立目录/UUID trace、
 Session 所有权、PID 与创建时间核验、清理失败即停止后续实例、全文件 SHA-256、Artifact Ledger 和 Core trace 均沿用 P0-2。
 仅所有规则通过且唯一阻塞是原始 Review 的人工复核时 acceptance_status=passed、task_status=blocked、
 manual_review_required=true。默认 completed 模式仍严格失败。远程 CAD CI 继承前置安全配置 BLOCKED，本阶段不更改或宣称验证。
@@ -162,6 +164,9 @@ Python 3.12.10 / Windows 11。五轮均从零生成八种零件，在新实例�
 ```powershell
 python -u tests/solidworks_golden_workflow.py --case parallel_gripper_retention_travel --output output/p0-2-1-real-five-05 --runs 5 --expected-terminal blocked --runtime-config output/p0-2-1-runtime.json
 ```
+
+> 上面是**当时实际执行**的命令，其中 `output/p0-2-1-runtime.json` 是本机配置（含本机绝对路径，被 `.gitignore` 排除，未入库）。
+> 外部复现请改用入库模板 `config/runtime.example.json`（自动探测），并更换一个尚不存在的 `--output` 目录。
 
 | 轮次 | 独立 PID | 原生几何、装配及交付 | Test Acceptance | Task Status | 自有文档 / 主进程清理 |
 | --- | --- | --- | --- | --- | --- |

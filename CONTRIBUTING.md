@@ -191,6 +191,38 @@ owner 按以下维度判断是否合并：
 - **未验证范围声明**：明确写出本次**没有**验证的内容（例如：自由拖动、连续扫掠、接触动力学、载荷、Motion Study、制造放行）
 - **不得外推**：静态工况的通过不能表述为"运动能力已验证"；本机验收不能表述为远程 CI 验收
 
+### 8. 桌面端端到端测试（`ai_team/`）
+
+`ai_team/` 下是 CAD Studio（Tauri + React）的真实浏览器端到端测试。
+它们**不被 `pytest` 收集**，也不会在普通 `npm test` 中运行，需要单独执行。
+
+**统一前置条件（缺任一项都会失败，属环境问题而非代码缺陷）：**
+
+1. 已安装依赖并**构建过前端产物**：`cd apps/workbench-ui && npm ci && npm run build`
+   （脚本从 `apps/workbench-ui/node_modules/playwright` 引入 Playwright，从 `apps/workbench-ui/dist` 加载页面）
+2. 已安装 Chromium：`cd apps/workbench-ui && npx playwright install chromium`
+3. 在**仓库根目录**执行（脚本用 `path.resolve(__dirname, "..")` 定位仓库根）
+
+| 脚本 | 验证内容 | 额外前置 | 预估耗时 |
+| --- | --- | --- | --- |
+| `release-portable-e2e.cjs` | 便携包启动、诊断产物 | 先跑 `scripts/build_windows_release.ps1` 生成 `release-output/` | 3–8 min |
+| `nsis-install-e2e.ps1` | NSIS 安装/卸载、升级路径 | 同上，且需管理员权限 | 5–15 min |
+| `delivery-gate-e2e.cjs` | 交付门禁、版本记录、响应式布局 | 前端已构建 | 1–3 min |
+| `preview-viewport-e2e.cjs` | JS 预览清单、DXF Worker、图层面板、canvas 非空 | 前端已构建 | 1–3 min |
+| `workbench-e2e-final.cjs` | 工作台完整流程 | 前端已构建 + Tauri 可执行文件 | 3–8 min |
+| `provider-ui-e2e.cjs` | Agent Provider 配置界面 | 前端已构建 | 2–5 min |
+| `ui-layout-check.cjs` | 布局截图对比，输出到 `ai_team/ui_review/` | 前端已构建 | 1–2 min |
+
+```powershell
+# 典型顺序
+cd apps/workbench-ui; npm ci; npm run build; npx playwright install chromium; cd ../..
+node ai_team/delivery-gate-e2e.cjs
+node ai_team/preview-viewport-e2e.cjs
+```
+
+`ai_team/*` 默认被 `.gitignore` 排除，只放行上述 7 个脚本（见 `.gitignore` 的白名单）。
+新增脚本时需同时加入白名单，否则不会入库。
+
 ## 代码规范
 
 ### Python 代码风格

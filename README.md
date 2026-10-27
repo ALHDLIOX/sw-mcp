@@ -185,7 +185,10 @@ Artifacts + Evidence
 > 这是 **deterministic engineering benchmark**（Fake Handler/Reviewer + 故障注入），
 > 不是生产 SLA 或真实用户成功率。详见 [`docs/architecture/v2-evaluation.md`](docs/architecture/v2-evaluation.md)。
 
-原生 SolidWorks 操作当前以 **2026** 为支持与验收目标。方案 B 保留现有执行架构，修复失败状态、原生阵列、草图可编辑性和文档归属，并提供可选 HTTP 与可验证的产物取回；原有 60 个 MCP 工具的名称和输入 Schema 保持兼容。
+原生 SolidWorks 操作当前以 **2026** 为支持与验收目标。方案 B 保留现有执行架构，修复失败状态、原生阵列、草图可编辑性和文档归属，并提供可选 HTTP 与可验证的产物取回。
+
+**MCP 工具数为 61**（实际清点：`mcp-server/server.py` 中 61 个 `@mcp.tool()`，名称去重后仍为 61）。
+其中原有 60 个的名称与输入 Schema 保持兼容，另新增 1 个只读产物工具 `cadstudio_read_artifact`。
 
 ---
 

@@ -1,5 +1,10 @@
 # P0-1.2 合并前检查报告
 
+> **PR 编号口径（2026-10-27）**：本文写于 P0-1.2 阶段，当时在途的是 **PR #39**。
+> 当前阶段为 P0-2.1，在途 PR 是 **#43**（Draft，base 为 P0-2 分支 `test/p0-real-assembly-gripper-2026`）。
+> 中间的 **#42** 是 P0-2 阶段。三者均为堆叠 Draft，均不合并 main。
+> 本文其他结论（BLOCKED、所需 GitHub 配置）对 #43 同样适用。
+
 **合并就绪性：BLOCKED。保留 Draft PR #39，当前不建议合并 main。**
 代码层已移除一次性测试分支限制，但 GitHub 实际权限和环境保护尚不具备完整安全条件。
 本阶段没有创建 Environment、Secret、Runner，也未修改仓库设置或推送 main。
@@ -231,6 +236,9 @@ acceptance failed / task blocked，未启动额外 CAD 或改写原报告。
 $env:PYTHONUTF8 = '1'
 python tests/solidworks_golden_workflow.py --case mounting_bracket --output output/p0-12-real-five-01 --runs 5 --expected-terminal blocked --runtime-config output/p0-12-runtime.json
 ```
+
+> 该命令为当时实际执行记录，`output/p0-12-runtime.json` 是未入库的本机配置。
+> 外部复现请改用 `config/runtime.example.json`（`null` 路径 = 自动探测），并更换尚不存在的输出目录。
 
 本次 JSON 配置显式指定本机已经安装的原厂材料库，模板自动发现；安装路径和库文件 hash
 记录在报告中，未写入代码默认值。此结果仅覆盖该 2026 安装和精确材料条目，不声称验证其它版本。
