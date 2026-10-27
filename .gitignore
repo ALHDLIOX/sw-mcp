@@ -68,5 +68,6 @@ desktop.ini
 *.pdf
 *.dxf
 *.dwg
+# Local CAD deliverables, previews and evidence stay on this machine.
 output/
 exports/

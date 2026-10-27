@@ -7,10 +7,12 @@ Personal fork of [wzyn20051216/solidworks-automation-skill](https://github.com/w
 Use a checked-in JSON recipe instead of generating another one-off COM script:
 
 ```powershell
-python scripts/draw_from_recipe.py --recipe examples/peek_bracket_drawing.json --model C:\parts\PEEK_CONNECTING_BRACKET.SLDPRT --out-dir C:\deliveries\bracket-01 --version 2024
+python scripts/draw_from_recipe.py --recipe examples/peek_bracket_drawing.json --model output/peek_bracket/model/PEEK_CONNECTING_BRACKET.SLDPRT --out-dir output/peek_bracket/delivery --version 2024
 ```
 
 The recipe defines model entities, associative dimensions, view positions and literal title fields. The runner uses one SolidWorks session, a simple six-field A3 title block, saved-file dimension readback, final PDF text checks and a PNG preview. Existing outputs are protected. MCP clients can call `solidworks_generate_drawing_from_recipe` with the same JSON. See [the maintained workflow](subskills/solidworks-engineering-drawing/references/recipe-workflow.md).
+
+Local products belong under `output/<part-or-task>/`: `model/` for native models and exchange formats, `delivery/` for the current drawing/PDF/preview, `history/` for older runs, and `verification/` or `debug/` for evidence. The entire `output/` tree is Git-ignored; repository commits contain source, skills and reusable recipes only. Choose a new delivery subdirectory for a new revision rather than overwriting an accepted run.
 
 **AI Skill + MCP toolkit for reliable desktop CAD automation.**
 

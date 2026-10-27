@@ -183,6 +183,8 @@ from sw_connect import connect_solidworks, mm, deg, new_document
 
 ### 机械图纸默认底线
 
+产物统一写入仓库内 `output/<零件或任务>/`：`model/` 存原生零件与交换格式，`delivery/` 存当前正式工程图/PDF/预览，`history/` 保留旧版本，`verification/` 和 `debug/` 保存验收证据与调试资料。`output/` 必须保持 Git 忽略，不提交用户模型、图纸或运行记录。移动工程图/零件后必须核对或重建引用；历史报告中的旧绝对路径作为运行事实保留，不冒充当前有效路径。
+
 本仓库维护的可复用出图入口是 `scripts/draw_from_recipe.py` / MCP `solidworks_generate_drawing_from_recipe`。已有零件且需要明确尺寸、等轴测和简洁标题栏时，先读工程图子技能的 [配方流程](subskills/solidworks-engineering-drawing/references/recipe-workflow.md)，复用或修改 JSON 配方；不要重新编写连接、视图定位、保存重开、PDF 校验脚本。首次新几何只需新增实体选择和尺寸配方；执行器缺能力时才扩展公共模块并补回归。
 
 配方入口默认使用简洁六字段标题栏；用户指定企业/国标/参考图框时遵从指定模板。一次受控 `SolidWorksSession` 内完成创建、保存重开和导出，不为每次局部排版修改重启 SW。必须继续执行最终 PDF 与视觉检查，不以省时为由跳过验证。
