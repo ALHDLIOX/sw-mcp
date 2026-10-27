@@ -27,7 +27,12 @@ def test_baseline_file_present():
     baseline = _load_baseline()
     assert baseline["schema_version"] == "2.0"
     assert baseline["baseline_version"] == "3"
-    assert baseline["workflow_count"] == 10
+    # workflow_count 与 golden-workflows.yaml 交叉一致，避免写死数字（曾写死 10，
+    # 新增 parallel_gripper_assembly 后变为 11 导致误报）。
+    from evals.runner import load_golden_workflows
+
+    workflows = load_golden_workflows()
+    assert baseline["workflow_count"] == len(workflows["workflows"])
     assert baseline["scenario_count"] == 37
     assert "nominal_metrics" in baseline
     assert "robustness_metrics" in baseline
