@@ -124,7 +124,7 @@ def test_p021_contract_and_expected_manual_gate(tmp_path):
 @pytest.mark.parametrize('fault',['missing_limit','wrong_stroke','mate_failed','missing_endplate','wrong_clearance','missing_center_stop','collision',
     'unknown_interference','lost_intended_contact','fake_zero_contact','cached_request','actual_overtravel','unknown_limit','wrong_pin_position',
     'wrong_bom','step_mismatch','cleanup','review_warn','review_fail','masked_collision_control','masked_suppression_control','stale_material','wrong_density','rivet_opposite_side',
-    'nominal_limit_expanded','missing_physical_overtravel','wrong_physical_stop'])
+    'nominal_limit_expanded','missing_physical_overtravel','wrong_physical_stop','cad_disconnect'])
 def test_p021_rejects_faults(tmp_path,fault):
     r=report_fixture(tmp_path/'offline'); row=r['travel_report'][0]; snap=row['snapshot']
     if fault=='missing_limit':snap['mates']['mates'].pop()
@@ -145,6 +145,7 @@ def test_p021_rejects_faults(tmp_path,fault):
     elif fault=='wrong_bom':r['reopened']['bom'][0]['quantity']+=1
     elif fault=='step_mismatch':r['step_reopened']['bodies'][0]['volume_mm3']+=1
     elif fault=='cleanup':r['cleanup']['status']='failed'
+    elif fault=='cad_disconnect':r['error']='COM disconnected; remaining document state unknown'
     elif fault=='stale_material':r['parts']['rod']['reopened']['material']['name']='6061-T6 (SS)'
     elif fault=='wrong_density':r['parts']['rod']['reopened']['mass']['density_kg_m3']=1000
     elif fault=='nominal_limit_expanded':snap['limits']['slider_left_travel_limit']['maximum_mm']+=2

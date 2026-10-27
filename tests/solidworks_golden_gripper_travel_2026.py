@@ -266,7 +266,7 @@ def request_valid(row):
 
 
 def overtravel_valid(rows,spec=None):
-    """@brief 四个越限请求必须被原生限位拒绝；从原始矩阵和快照重算边界。"""
+    """@brief 四个未提交 Mate 参数的变换请求须保持合法位姿；不作为机械接触阻挡证明。"""
     s=spec or load_spec(); expected={(role,target) for role,b in s['travel_mm'].items() for target in (b[0]-2,b[-1]+2)}
     if len(rows)!=4 or {(r['role'],r['requested_mm']) for r in rows}!=expected: return False
     for row in rows:
@@ -301,7 +301,9 @@ def physical_overtravel_valid(rows,spec=None):
 
 def extra_evidence():
     """@brief 保持、配合、九工况和全部原生零件均为必需证据。"""
-    return {'spec.json','engineering_plan.json','parts.json','travel_report.json','tolerance_report.json','native_fault_controls.json','bom.csv',*(f'parts/{name}.SLDPRT' for name in load_spec()['parts'])}
+    return {'spec.json','engineering_plan.json','parts.json','travel_report.json','tolerance_report.json','native_fault_controls.json','bom.csv',
+        'assembly_progress.json',*(f'checkpoints/{stage}.SLDASM' for stage in ('components_inserted','before_travel_limits','mates_created')),
+        *(f'parts/{name}.SLDPRT' for name in load_spec()['parts'])}
 
 
 def workflow_checks(report):
@@ -406,6 +408,16 @@ def create_assembly(session,output,spec,template):
     from scripts.sw_connect import get_com_member as member,create_empty_dispatch_variant
     from scripts.sw_assembly import add_component,create_math_transform,get_component_feature_entity,get_assembly_entity,iter_feature_tree,select_entities_for_mate,add_mate5_checked
     model=session.new_assembly(template); components={}
+    progress={'stage':'inserting_components','completed_roles':[],'completed_mates':[],'next_mate':None,'checkpoints':[]}
+    def journal():
+        """@brief 每次 COM 调用前记录下一步；不能将进度记录当作成功证据。"""
+        write_json(output/'assembly_progress.json',progress)
+    def checkpoint(stage):
+        """@brief 独立原生副本保留装配现场；禁止覆盖已有 CAD，最终验收仍重新回读。"""
+        path=output/'checkpoints'/f'{stage}.SLDASM';path.parent.mkdir(exist_ok=True)
+        if path.exists() or not session.save(model=model,file_path=str(path)):raise RuntimeError('装配检查点保存失败: '+stage)
+        progress['checkpoints'].append(str(path));progress['stage']=stage;journal()
+    journal()
     for role,i in spec['instances'].items():
         c=add_component(model,str(output/'parts'/f"{i['part']}.SLDPRT"),sw=session.sw)
         if c is None: raise RuntimeError('组件插入失败: '+role)
@@ -417,6 +429,8 @@ def create_assembly(session,output,spec,template):
         if i['fixed']:
             model.ClearSelection2(True); c.Select4(False,create_empty_dispatch_variant(),False); member(model,'FixComponent')
         components[role]=c
+        progress['completed_roles'].append(role);journal()
+    checkpoint('components_inserted')
     def cylinder(role,x):
         c=components[role]; part=member(c,'GetModelDoc2'); faces=[]
         for body in member(part,'GetBodies2',0,False):
@@ -428,6 +442,8 @@ def create_assembly(session,output,spec,template):
         if len(faces)!=1: raise RuntimeError('导向圆柱面不唯一: '+role)
         return get_assembly_entity(c,faces[0])
     for wanted in mate_contract(spec):
+        progress['stage']='creating_mates';progress['next_mate']=wanted['name'];journal()
+        if 'minimum_mm' in wanted and len(progress['checkpoints'])==1:checkpoint('before_travel_limits')
         a,b=wanted['roles']
         entities=[cylinder(a,wanted['left_x']),cylinder(b,wanted['right_x'])] if wanted['type']==1 else [get_component_feature_entity(components[r],plane) for r,plane in zip((a,b),wanted['planes'])]
         before={member(f,'Name') for f,_ in iter_feature_tree(model)}
@@ -440,6 +456,8 @@ def create_assembly(session,output,spec,template):
         added=[f for f,_ in iter_feature_tree(model) if member(f,'Name') not in before and str(member(f,'GetTypeName2')).startswith('Mate') and member(f,'GetTypeName2')!='MateGroup']
         if len(added)!=1: raise RuntimeError('Mate 特征无法唯一关联')
         added[0].Name=wanted['name']; print('Mate: '+wanted['name'],flush=True)
+        progress['completed_mates'].append(wanted['name']);journal()
+    progress['next_mate']=None;checkpoint('mates_created')
     return model,components
 
 
