@@ -52,7 +52,7 @@ CAD Studio 不附带模型额度，也不保存 API Key。模型账号、套餐�
 
 | 层级 | 内容 | 何时需要 | 安装方式 |
 |---|---|---|---|
-| **最小** | `pywin32`、`comtypes` | 只想驱动 SolidWorks / AutoCAD 的 COM 接口 | `python -m pip install -r requirements.txt` |
+| **最小** | `pywin32`、`comtypes` | 只想驱动 SolidWorks / AutoCAD 的 COM 接口 | `python -m pip install "pywin32>=305" "comtypes>=1.2.0"`（仅 Windows） |
 | **完整** | 另含 `mcp`、`pydantic`、`ezdxf`、`matplotlib`、`PyMuPDF`、`jsonschema` | 需要 MCP server、DXF 读写、预览图与 Schema 校验（CAD Studio 与 Golden 流程都需要） | 同上，`requirements.txt` 已包含 |
 | **开放格式** | `cadquery-ocp`、`trimesh`、`numpy` | 没有 SolidWorks 也要写 STEP/BREP/STL/OBJ/GLB | `python -m pip install -r requirements-occt.txt` |
 

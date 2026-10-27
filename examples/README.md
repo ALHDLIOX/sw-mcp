@@ -178,8 +178,14 @@ python scripts\cad_studio.py check-dfm `
 > `--profile` 的相对路径会被拒绝（`dfm_invalid_profile`：Profile 必须是存在的 `.json` 文件），
 > 请使用绝对路径。上例用 PowerShell 的 `$PWD` 展开为绝对路径。
 
-该样例的实际结果是 `review_required`：`profile_internal_corner_tooling` 未通过，
-因为盒体的内角半径小于档案要求的 `minimumInternalCornerRadius: 1.5`。
+该样例的实际结果是 `review_required`（12 项检查：8 pass / 2 warning / 1 fail）：
+
+| 状态 | 检查项 | 原因 |
+|---|---|---|
+| fail | `profile_internal_corner_tooling` | 盒体内角半径小于档案要求的 `minimumInternalCornerRadius: 1.5` |
+| warning | `machining_internal_corner_radius` | 模型未声明内角半径/刀具半径（通用加工建议项） |
+| warning | `hole_diameter_inventory` | 该样例不含孔特征，无法核对孔径清单 |
+
 这是刻意的——示例要展示"档案能真正约束几何"，而不是永远全绿。
 
 ---

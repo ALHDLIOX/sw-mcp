@@ -1,3 +1,11 @@
+# 真实 CAD 回归（手动触发，**不是**必需合并检查）
+#
+# 合并门禁只由 windows-release.yml 的 `test-and-build`（GitHub 托管 windows-2022）承担。
+# 本工作流需要一台装有 SolidWorks 的自托管 Runner，仓库当前 Runner 数为 0，因而无法被调度；
+# 它既不阻止合并，也不产生任何远端 CAD 证据。不要把它写成"远程 CAD CI 已通过"。
+#
+# 若未来登记 Runner 并希望将其升级为门禁，必须先补齐 cad-validation Environment 与只读审计令牌，
+# 并单独评估"自托管 Runner 会执行工作流中的任意代码"这一风险后再改 ruleset。
 name: Windows CAD Regression
 
 on:

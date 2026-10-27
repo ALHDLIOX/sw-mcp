@@ -817,3 +817,21 @@ test('computeManifest 把缺失的敏感文件记为 null 而不是跳过', () =
   assert.equal(manifest.files['scripts/ci/cad_ci_guard.cjs'], null);
   assert.equal(Object.keys(manifest.files).length, drift.SENSITIVE_FILES.length);
 });
+
+test('漂移摘要在 CRLF 与 LF 检出下一致（跨平台不产生假漂移）', () => {
+  const dir = fs.mkdtempSync(path.join(TMP_ROOT, 'drift-eol-'));
+  const lf = path.join(dir, 'lf.cjs');
+  const crlf = path.join(dir, 'crlf.cjs');
+  fs.writeFileSync(lf, 'const a = 1;\nconst b = 2;\n');
+  fs.writeFileSync(crlf, 'const a = 1;\r\nconst b = 2;\r\n');
+  assert.equal(drift.sha256OfFile(lf), drift.sha256OfFile(crlf), '行尾差异不应改变摘要');
+});
+
+test('漂移摘要仍能检测真实内容变化', () => {
+  const dir = fs.mkdtempSync(path.join(TMP_ROOT, 'drift-content-'));
+  const first = path.join(dir, 'a.cjs');
+  const second = path.join(dir, 'b.cjs');
+  fs.writeFileSync(first, 'const a = 1;\n');
+  fs.writeFileSync(second, 'const a = 2;\n');
+  assert.notEqual(drift.sha256OfFile(first), drift.sha256OfFile(second), '内容变化必须改变摘要');
+});

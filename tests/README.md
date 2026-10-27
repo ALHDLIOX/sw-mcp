@@ -82,15 +82,43 @@ python tests/solidworks_golden_workflow.py --case mounting_bracket --output outp
 `ccx.exe` 的查找顺序：`CADSTUDIO_SOLVER_DIRS` → `D:\`、`E:\` 优先 → 本机全部盘符下的
 `CADStudio\CalculiX-2.23\calculix_2.23_4win\ccx.exe`。
 
+### MCP 原生线束（一次性人工验收）
+
+| 脚本 | 用途 | 额外前置 | 预估耗时 |
+| --- | --- | --- | --- |
+| `manual_native_wire_2026.py` | 通过真实 MCP 注册工具验收 SW2026 原生线束读写，只操作本轮自建实例与文件 | 运行前**不得存在任何 SolidWorks 进程**（否则直接退出）；需要 `pywin32`、可导入 `mcp-server/server.py`；两个位置参数 `<repo-root> <不存在的输出目录>`（脚本用 `mkdir(exist_ok=False)` 建目录） | 5–15 min ✅ |
+
+用法：
+
+```powershell
+python tests\manual_native_wire_2026.py "$PWD" "$PWD\output\native-wire-$(Get-Date -Format yyyyMMddHHmm)"
+```
+
 ---
 
 ## 与 CI 的关系
 
-- 远程 `Windows CAD Regression` 工作流（`workflow_dispatch`）会跑上表的一个 Golden 用例，
-  由 `golden_case` 与 `runs` 输入选择。**目前该工作流从未成功执行过**，
-  前置条件（`cad-validation` Environment、自托管 Runner、只读审计令牌）均未配置。
-- 离线 `pytest` 由 `Windows Release Build` 的 `test-and-build` 作业执行。
+本仓库的 CI 采用**混合方案**（2026-10-27 决策）：
+
+| 作业 | 运行位置 | 是否必需合并检查 | 内容 |
+| --- | --- | --- | --- |
+| `test-and-build`（`windows-release.yml`） | GitHub 托管 `windows-2022` | **是**（`main` 的唯一必需检查） | 治理单测 + `pytest` + 离线 eval + 前端/Rust 构建 + 发布契约 |
+| `authorize` / `cad-regression`（`windows-cad-regression.yml`） | `ubuntu-24.04` + `[self-hosted, Windows, CAD]` | **否**（手动 `workflow_dispatch`） | 治理准入 + 真实 CAD Golden |
+
+由此产生三条必须遵守的口径：
+
+1. **远程 CAD 真机测试不是合并前置条件。** 当前仓库自托管 Runner 数为 0，该工作流无法被调度，
+   因此它既不能作为门禁，也不能作为证据来源。
+2. **真实 CAD 验收只在维护者本机进行**，结果写入本地证据包，不进入 CI。
+   `capabilities.yaml` 中标注 `verified` 的真机能力，其证据来自本机五轮执行，不是远端 CI。
+3. **不得声称"远程 CAD CI 已通过"。** 离线 `pytest` 由托管 `test-and-build` 执行，这一层是真跑过的；
+   真机层没有远端运行记录。
+
+其它说明：
+
 - 真机脚本**不会**被 CI 的 pytest 收集，也不应该被收集——它们需要 GUI 与授权。
+- 若将来登记了自托管 Runner，需要**同时**补齐 `cad-validation` Environment 与只读审计令牌，
+  该工作流才会真正可执行；届时是否把它升级为必需检查需要单独评估（自托管 Runner 会执行工作流中的任意代码）。
 
 ## 结论口径
 

@@ -30,7 +30,10 @@
   `node scripts/ci/check_governance_drift.cjs`；后者只能把治理代码改动变成显式差异，**不能阻止有合并权者一并修改**
 - **在上述调整完成并实际验证之前，不得对外声称本仓库具备独立审批能力或强制 CI 门禁**
 
-上述限制的跟踪条目见发布阻断清单 B-02。治理代码、工作流与信任根的修改仍需维护者人工确认。
+上述限制的跟踪条目见发布阻断清单 B-02；让 owner 也无法绕过必需检查的最小变更方案（单字段清空
+`bypass_actors`，含验收判据与回滚）见
+[`docs/architecture/governance-bypass-remediation.md`](docs/architecture/governance-bypass-remediation.md)。
+治理代码、工作流与信任根的修改仍需维护者人工确认。
 
 ### 维护者：规则集变更后必须重新采集证明
 
@@ -145,7 +148,7 @@ GH_TOKEN="$(gh auth token)" node scripts/ci/capture_governance_attestation.cjs -
 
 - PR 必须通过 `test-and-build` 状态检查（ruleset `protect-main` 的实际必需检查名）
 - 该检查当前包含：`pytest` 全量、skill/MCP/release 校验、工作台前后端测试与构建，
-  以及**治理门禁自检**——`node --test tests/test_cad_ci_guard.cjs`（91 项）与
+  以及**治理门禁自检**——`node --test tests/test_cad_ci_guard.cjs`（当前 93 项）与
   `node scripts/ci/check_governance_drift.cjs`（10 个敏感文件的漂移检测）
 - **改动 `scripts/ci/`、`.github/workflows/`、`tests/test_cad_ci_guard.cjs`、
   `docs/architecture/evidence/` 或信任根时**，必须运行 `check_governance_drift.cjs --update`
@@ -153,6 +156,35 @@ GH_TOKEN="$(gh auth token)" node scripts/ci/capture_governance_attestation.cjs -
 - **本地通过不能替代 CI 通过**。两者结论不一致时，以 CI 为准并排查差异
 - 注意：owner 当前仍在 ruleset `bypass_actors` 中（`bypass_mode = always`），这是已记录的治理缺口。
   **这不代表 CI 检查可被忽视**，也不构成"已强制门禁"的对外表述依据
+- **真实 CAD 真机测试不是合并前置条件**：仓库没有自托管 Runner，`Windows CAD Regression` 为手动触发、
+  非必需检查，无法被调度。合并判断只看托管 CI（`test-and-build`），真机证据由维护者在本机验收后写入 PR 描述
+
+### 4.1 合并流程与独立审核的边界
+
+**外部贡献者的 PR**：
+
+1. 贡献者 Fork 并开 PR（本仓库外部账号无写权限，无法直接推受保护分支）
+2. owner **人工**逐行审查代码、测试证据与影响面（维度见下一节）
+3. `test-and-build` 必须**真实通过**；失败即不合并，不接受"本地跑过了"作为替代
+4. 由 owner 合并；合并后 owner 负责跟进后续回归
+
+**owner 自己提交的 PR（如实披露限制）**：
+
+- 单人维护模式下，owner 的 PR **无法获得独立第三方审查**——没有第二人具备批准权限。
+  本项目**不声称**这类 PR 经过独立审核。
+- 因此 owner 的 PR 必须做到：PR 描述写明"无独立审查，因单人维护"；列出自查清单与测试输出；
+  不得把自审写成"已审核通过"或伪造 approve 记录。
+- **禁止**用 `bypass_actors`、管理员强制推送、关闭规则集、或把失败检查标记为 skipped 来让 PR 通过。
+  唯一允许的例外是"检查因基础设施故障（如 Actions 配额耗尽）未能运行"，此时必须记录故障证据并说明未验证。
+
+**stacked PR 的已知缺口**：
+
+- `protect-main` 只作用于 `refs/heads/main`。本仓库当前存在一条栈：
+  `main ← #39 ← #42 ← #43`，其中 #42、#43 的目标分支是另一条特性分支，
+  **不受必需检查约束**。
+- 因此 owner 必须在每一层合并后，对下一层重新触发并确认 `test-and-build` 通过；
+  不能因为"底层 PR 过了"就推定上层已受门禁保护。
+- 若要把中间层也纳入门禁，只能靠人工纪律或新增指向这些分支的 ruleset；当前未实现，不要宣称已覆盖。
 
 ### 5. 代码审查维度
 

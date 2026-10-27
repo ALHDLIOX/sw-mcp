@@ -37,8 +37,18 @@ const SENSITIVE_FILES = Object.freeze([
   'tests/test_cad_ci_guard.cjs',
 ]);
 
+/**
+ * @brief 对文件内容取 SHA-256，**先做行尾归一化**。
+ *
+ * @note 为什么必须归一化：Windows 上 `core.autocrlf=true` 会把工作树写成 CRLF，
+ *       而 Linux 检出为 LF。若直接对原始字节取摘要，同一个提交在不同平台会得到不同哈希，
+ *       表现为**假漂移**并误阻断 `test-and-build`。归一化只抹平 CRLF/LF 差异，
+ *       任何实际内容改动仍会产生新摘要，检测能力不降低。
+ *       十个敏感文件均为文本，`toString('utf8')` 不会损坏内容。
+ */
 function sha256OfFile(absolutePath) {
-  return crypto.createHash('sha256').update(fs.readFileSync(absolutePath)).digest('hex');
+  const text = fs.readFileSync(absolutePath).toString('utf8').replace(/\r\n/g, '\n');
+  return crypto.createHash('sha256').update(Buffer.from(text, 'utf8')).digest('hex');
 }
 
 /** @brief 按固定顺序收集摘要；文件缺失记为 null，缺失本身也构成漂移。 */

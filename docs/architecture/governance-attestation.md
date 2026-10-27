@@ -302,7 +302,7 @@ node scripts/ci/check_governance_drift.cjs --update # 有意变更后重建清�
 ## 10. 自检
 
 ```bash
-# 准入策略、证明链路、采集工具、漂移检测的完整回归（91 项）
+# 准入策略、证明链路、采集工具、漂移检测的完整回归（当前 93 项）
 node --test tests/test_cad_ci_guard.cjs
 
 # 漂移检测

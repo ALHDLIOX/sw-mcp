@@ -185,6 +185,24 @@ Artifacts + Evidence
 > 这是 **deterministic engineering benchmark**（Fake Handler/Reviewer + 故障注入），
 > 不是生产 SLA 或真实用户成功率。详见 [`docs/architecture/v2-evaluation.md`](docs/architecture/v2-evaluation.md)。
 
+### 验证边界（Verification Boundary）
+
+本项目的验证分三层，**结论不能跨层套用**：
+
+| 层 | 在哪里跑 | 覆盖什么 | 不覆盖什么 |
+|---|---|---|---|
+| L1 离线回归 | 任意机器 | `pytest`（全量，当前 1045 项）、`evals/runner.py`（12 workflow / 43 scenario）、治理单测（当前 93 项） | 需要 SolidWorks / AutoCAD 进程的一切 |
+| L2 托管 CI | GitHub 托管 `windows-2022` | 与 L1 相同，外加前端/ Rust 构建与发布契约检查；作业名 `test-and-build`，是 `main` 的**唯一必需状态检查** | 真实 CAD 执行 |
+| L3 真实 CAD 验收 | **仅维护者本机**（Windows 11 + SolidWorks 2026 SP01.1） | Golden 五轮真机、装配/工程图/运动算例等真机回归 | 其它机器、其它版本 |
+
+必须明确的三点：
+
+1. **远端不存在 CAD 真机执行证据。** 仓库没有自托管 Runner，`Windows CAD Regression` 工作流为手动触发、
+   **不是必需检查**，当前无法执行。任何"远程 CAD CI 已通过"的表述都是错的。
+2. **本机通过 ≠ 跨机器通过。** 换一台机器请按 `Prerequisites` 与 `docs/CAD_STUDIO_USER_MANUAL.md` 重新自检，
+   不要直接引用维护者的验收结论。
+3. **L2 通过 ≠ 治理闭环。** 必需检查只保护 `main`；指向特性分支的 PR（含 stacked PR）不受该规则约束。
+
 原生 SolidWorks 操作当前以 **2026** 为支持与验收目标。方案 B 保留现有执行架构，修复失败状态、原生阵列、草图可编辑性和文档归属，并提供可选 HTTP 与可验证的产物取回。
 
 **MCP 工具数为 61**（实际清点：`mcp-server/server.py` 中 61 个 `@mcp.tool()`，名称去重后仍为 61）。
