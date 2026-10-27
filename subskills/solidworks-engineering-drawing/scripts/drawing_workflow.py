@@ -17,11 +17,11 @@ pythoncom, _win32com, VARIANT = import_com_dependencies()
 
 
 PAPER_SIZES = {
-    "A4": {"code": 5, "width_m": 0.297, "height_m": 0.210},
-    "A3": {"code": 6, "width_m": 0.420, "height_m": 0.297},
-    "A2": {"code": 7, "width_m": 0.594, "height_m": 0.420},
-    "A1": {"code": 8, "width_m": 0.841, "height_m": 0.594},
-    "A0": {"code": 9, "width_m": 1.189, "height_m": 0.841},
+    "A4": {"code": 6, "width_m": 0.297, "height_m": 0.210},
+    "A3": {"code": 8, "width_m": 0.420, "height_m": 0.297},
+    "A2": {"code": 9, "width_m": 0.594, "height_m": 0.420},
+    "A1": {"code": 10, "width_m": 0.841, "height_m": 0.594},
+    "A0": {"code": 11, "width_m": 1.189, "height_m": 0.841},
 }
 
 STANDARD_DRAWING_SCALES = (10.0, 5.0, 2.0, 1.0, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01)
@@ -560,6 +560,11 @@ def _apply_view_layout(view, item, numerator, denominator) -> dict:
     }
 
 
+def set_view_position(view, position_m):
+    """Move a drawing view using a typed SAFEARRAY and verify native coordinates."""
+    return _set_view_center(view, position_m)
+
+
 def _normalise_orientation(value):
     """@brief 将 SolidWorks 标准视图方向统一为 front/top/right 键。"""
     compact = re.sub(r"[^a-z\u4e00-\u9fff]", "", str(value or "").casefold())
@@ -721,6 +726,13 @@ def _map_native_standard_views(views):
 
 def _map_standard_views_from_sheet_views(sheet_views):
     """@brief 从整张图纸视图中筛出并映射前、俯、右三个标准视图。"""
+    # Independently inserted standard views are all Type=7 on SW2024, not
+    # projected Type=4. Preserve their explicit orientation before heuristics.
+    explicit = [view for view in sheet_views
+                if _normalise_orientation(_safe_member(view, "GetOrientationName", default=""))]
+    if { _normalise_orientation(_safe_member(view, "GetOrientationName", default=""))
+         for view in explicit } >= {"front", "top", "right"}:
+        return _map_native_standard_views(explicit)
     oriented_fronts = [
         view for view in sheet_views
         if _normalise_orientation(_safe_member(view, "GetOrientationName", default="")) == "front"

@@ -304,8 +304,8 @@
       "backends": ["solidworks-com", "autocad-com"],
       "verified_versions": ["2024", "2026"],
       "dependencies": ["SolidWorks 或 AutoCAD"],
-      "mcp_tools": ["solidworks_generate_drawing", "solidworks_review_drawing", "solidworks_inspect_drawing"],
-      "limitations": ["工程图生成与审视已抽离到 solidworks-engineering-drawing 子技能；SW2026 已验证三视图、6 个真实尺寸实体、PDF 和非空 BMP", "IAnnotation 不提供尺寸文字原生包围盒，只能用锚点/字体保守估算并人工目视复核", "图框、标题栏、尺寸链、孔表和 GB/T 风格必须人工目视复核", "钣金缺少可靠展开证据时返回 blocked/pilot"],
+      "mcp_tools": ["solidworks_generate_drawing", "solidworks_generate_drawing_from_recipe", "solidworks_review_drawing", "solidworks_inspect_drawing"],
+      "limitations": ["工程图生成与审视已抽离到 solidworks-engineering-drawing 子技能；SW2026 已验证三视图、6 个真实尺寸实体、PDF 和非空 BMP", "新配方入口支持显式几何关联尺寸、四视图、六字段简洁标题栏、保存重开和最终 PDF 文字匹配；尚不自动设计任意图纸的尺寸链", "尺寸/注释采用最终 PDF 矢量文字框检查；原生注释范围可能包含引线，不能当作精确文字框", "图框、标题栏、尺寸链、孔表和 GB/T 风格必须人工目视复核", "钣金缺少可靠展开证据时返回 blocked/pilot"],
       "allowed_modes": ["interactive", "reviewed"]
     },
     {

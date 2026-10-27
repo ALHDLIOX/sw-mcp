@@ -183,6 +183,10 @@ from sw_connect import connect_solidworks, mm, deg, new_document
 
 ### 机械图纸默认底线
 
+本仓库维护的可复用出图入口是 `scripts/draw_from_recipe.py` / MCP `solidworks_generate_drawing_from_recipe`。已有零件且需要明确尺寸、等轴测和简洁标题栏时，先读工程图子技能的 [配方流程](subskills/solidworks-engineering-drawing/references/recipe-workflow.md)，复用或修改 JSON 配方；不要重新编写连接、视图定位、保存重开、PDF 校验脚本。首次新几何只需新增实体选择和尺寸配方；执行器缺能力时才扩展公共模块并补回归。
+
+配方入口默认使用简洁六字段标题栏；用户指定企业/国标/参考图框时遵从指定模板。一次受控 `SolidWorksSession` 内完成创建、保存重开和导出，不为每次局部排版修改重启 SW。必须继续执行最终 PDF 与视觉检查，不以省时为由跳过验证。
+
 以后凡是本技能参与 CAD/机械结构/3D 打印项目，都默认执行这些底线：
 
 1. 不把“看得懂的示意图”当成“能制造的工程图”。只要涉及开孔、开槽、接口、装配孔或打印外壳，必须补齐外形尺寸、壁厚/底厚、孔槽规格和定位尺寸。

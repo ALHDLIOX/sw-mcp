@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SERVER_PATH = ROOT / "mcp-server" / "server.py"
 
 REQUIRED_TOOLS = {
+    "solidworks_generate_drawing_from_recipe",
     "solidworks_inspect_native_geometry",
     "solidworks_build_round_sweeps",
     "solidworks_import_step_part",

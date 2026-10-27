@@ -7,6 +7,21 @@ from scripts.sw_review import _import_pdf_parser, inspect_pdf_text_layout
 from scripts.sw_drawing_review import review_drawing_artifacts
 
 
+def test_final_pdf_glyph_bounds_replace_native_note_extent_including_leader():
+    from scripts.sw_drawing_review import _MODULE
+    native_box = {'left':.05,'bottom':.10,'right':.20,'top':.25}
+    structure = {'sheet_size':{'width_m':.42,'height_m':.297},
+                 'notes':[{'text':'2X M3x0.5 DEPTH 6','box':native_box}]}
+    notes = {'pdf':{'pages':[{'page':1,'widthPt':420,'heightPt':297}]},
+             'pdf_matches':[{'text':'2X M3x0.5 DEPTH 6','page':1,'bbox_pt':[50,40,100,45]}]}
+    result = _MODULE._with_rendered_note_boxes(structure,notes)
+    assert result['notes'][0]['native_annotation_extent'] == native_box
+    assert result['notes'][0]['box_source'] == 'pdf_vector_text'
+    assert result['notes'][0]['box']['left'] == pytest.approx(.05)
+    assert result['notes'][0]['box']['bottom'] == pytest.approx(.252)
+    assert structure['notes'][0]['box'] == native_box
+
+
 def test_pdf_vector_text_boxes_are_extracted_without_claiming_com_native(tmp_path: Path) -> None:
     """@brief PDF span 应保留真实边界来源，并识别尺寸候选。"""
     try:

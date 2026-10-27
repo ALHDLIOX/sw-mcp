@@ -957,6 +957,24 @@ class SolidWorksReviewInput(BaseInput):
     response_format: ResponseFormat = Field(default=ResponseFormat.JSON, description="Return format.")
 
 
+class SolidWorksDrawingRecipeInput(BaseInput):
+    """Declarative associative drawing recipe; no arbitrary script execution."""
+
+    recipe_path: str = Field(..., min_length=1, description="Existing native drawing recipe JSON path.")
+    output_dir: str = Field(..., min_length=1, description="Fresh directory for the native drawing, PDF and review.")
+    source_model: Optional[str] = Field(default=None, description="Optional source SLDPRT override.")
+    version: Optional[int] = Field(default=None, ge=2010, le=2035)
+    response_format: ResponseFormat = Field(default=ResponseFormat.JSON)
+
+    @field_validator("recipe_path")
+    @classmethod
+    def validate_recipe(cls, value: str) -> str:
+        from scripts.drawing_recipe import load_recipe
+        path = Path(os.path.expandvars(value)).expanduser().resolve()
+        load_recipe(path)
+        return str(path)
+
+
 class SolidWorksGenerateDrawingInput(BaseInput):
     """Input for the structured SolidWorks engineering drawing workflow."""
 
@@ -3208,6 +3226,20 @@ def _drawing_report_path(output_dir: Path, basename: str) -> Path:
     """@brief 返回工程图子技能报告路径。"""
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir / f"{basename}.json"
+
+
+@mcp.tool(
+    name="solidworks_generate_drawing_from_recipe",
+    title="Generate Associative Drawing From Reusable Recipe",
+    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+)
+def solidworks_generate_drawing_from_recipe(params: SolidWorksDrawingRecipeInput) -> str:
+    """Generate a simple-title A3 drawing, native dimensions, PDF and saved-file verification in one session."""
+    def op():
+        from scripts.native_drawing import generate_drawing
+        source = str(Path(os.path.expandvars(params.source_model)).expanduser().resolve()) if params.source_model else None
+        return generate_drawing(params.recipe_path, params.output_dir, source_model=source, version=params.version)
+    return _run_locked(op, params.response_format)
 
 
 @mcp.tool(

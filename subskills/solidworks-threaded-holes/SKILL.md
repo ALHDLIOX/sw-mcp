@@ -20,7 +20,7 @@ description: SolidWorks ISO 公制内螺纹孔自动化子技能。用于创建�
 3. 在 COM 前校验所有值为有限数，底孔小于公称直径，螺纹深度不超过底孔/零件厚度，孔位保留螺纹大径和倒角边界。
 4. 先创建真实底孔几何：盲孔用 `swEndCondBlind=0`，贯穿孔必须用 `swEndCondThroughAll=1`，不得用“板厚 + 1 mm”盲孔伪装。
 5. 按圆心、半径和入口面枚举圆边，不依赖 `Edge1` 或屏幕坐标。
-6. 尝试真实 Thread：`Type="Metric Tap"`，平面圆边使用选择标记 `1`，不要把同一圆边写入 `StartEntity`，不要调用不存在的 `LoadReferences`，不要用公称直径覆盖底孔圆柱直径。
+6. 尝试真实 Thread：`Type="Metric Tap"`，平面圆边使用选择标记 `1`，不要把同一圆边写入 `StartEntity`，不要调用不存在的 `LoadReferences`，不要用公称直径覆盖底孔圆柱直径。先选 `Size`，再设 `PitchOverride=True`，最后赋值 `Pitch`；SW2024 提前赋值可能静默保留 10 mm 默认螺距。创建前及保存重开后都要回读螺距/深度，不以规格名 M3x0.5 代替实际参数。
 7. Thread 失败时尝试 `InsertCosmeticThread3`；贯穿装饰螺纹用 `swEndConditionThrough=2`。COM 返回非空不等于持久化成功，必须重建后遍历特征树。
 8. 只有真实/装饰螺纹均未留在特征树时，`--visible-thread fallback` 才创建 3D 草图螺旋线。螺旋线允许小数圈以保持真实螺距；单独导出 `*_thread_evidence.bmp` 后将草图隐藏，避免污染标准预览。
 9. 创建孔口倒角，写入螺纹规格、底孔、深度、公差、旋向、终止条件和最终表达状态。

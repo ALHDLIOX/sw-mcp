@@ -1,5 +1,9 @@
 # SolidWorks MCP Server
 
+### Reusable drawing recipes
+
+`solidworks_generate_drawing_from_recipe` accepts `recipe_path`, `output_dir`, optional `source_model` and `version`. It uses the same validated runner as `python scripts/draw_from_recipe.py`: native associative dimensions, four standard views, a simple six-field A3 title block, save/reopen checks, PDF and PNG. Existing output files are protected. Start with `examples/peek_bracket_drawing.json`; see [the recipe workflow](../subskills/solidworks-engineering-drawing/references/recipe-workflow.md). The legacy `solidworks_generate_drawing` DrawingSpec contract is unchanged.
+
 本目录提供一个本地 MCP Server，同时暴露无 CAD 开放格式工具和 SolidWorks COM 白名单工具。MCP 与 CAD Studio、Skill、CLI 共用能力清单和数据协议。
 
 SolidWorks 是 Windows 桌面 COM 应用，不适合远程多客户端并发；因此本 server 默认使用 `stdio`，并在内部用全局锁串行执行所有 SolidWorks 操作。

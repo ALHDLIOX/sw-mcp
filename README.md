@@ -1,4 +1,16 @@
-# SolidWorks Automation Skill
+# sw-mcp
+
+Personal fork of [wzyn20051216/solidworks-automation-skill](https://github.com/wzyn20051216/solidworks-automation-skill), maintained at [ALHDLIOX/sw-mcp](https://github.com/ALHDLIOX/sw-mcp). Original MIT license and attribution are preserved.
+
+### Reusable native engineering drawings
+
+Use a checked-in JSON recipe instead of generating another one-off COM script:
+
+```powershell
+python scripts/draw_from_recipe.py --recipe examples/peek_bracket_drawing.json --model C:\parts\PEEK_CONNECTING_BRACKET.SLDPRT --out-dir C:\deliveries\bracket-01 --version 2024
+```
+
+The recipe defines model entities, associative dimensions, view positions and literal title fields. The runner uses one SolidWorks session, a simple six-field A3 title block, saved-file dimension readback, final PDF text checks and a PNG preview. Existing outputs are protected. MCP clients can call `solidworks_generate_drawing_from_recipe` with the same JSON. See [the maintained workflow](subskills/solidworks-engineering-drawing/references/recipe-workflow.md).
 
 **AI Skill + MCP toolkit for reliable desktop CAD automation.**
 
@@ -46,21 +58,23 @@ AI 负责理解意图、查证 API、规划步骤；Execution Core 保证执行�
 ### Option 1 — Skill（最简单）
 
 ```bash
-npx github:wzyn20051216/solidworks-automation-skill
+npx github:ALHDLIOX/sw-mcp
 # 或
-claude skill add https://github.com/wzyn20051216/solidworks-automation-skill
+claude skill add https://github.com/ALHDLIOX/sw-mcp
 ```
 
 ### Option 2 — MCP
 
 ```powershell
-npm install -g @smithery/cli
-smithery mcp add wzyn20051216/solidworks-automation-skill --client codex --config '{}'
+git clone https://github.com/ALHDLIOX/sw-mcp.git
+cd sw-mcp
+python -m pip install -r requirements.txt
+node mcp-server/register_all_ai_mcp.js --clients codex
 ```
 
 ### Option 3 — CAD Studio 桌面版
 
-从 [GitHub Releases](https://github.com/wzyn20051216/solidworks-automation-skill/releases) 下载 Windows 安装包。
+本 Fork 的新出图功能目前通过源码使用；桌面版可按 [`apps/workbench-ui/README.md`](apps/workbench-ui/README.md) 构建。上游安装包不包含本 Fork 的新增配方入口。
 
 > **Choose one entry point. You do not need to run all three.**
 

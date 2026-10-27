@@ -26,7 +26,7 @@ def test_old_position_setter_requires_typed_safearray(monkeypatch):
             self.position = tuple(value.values)
     monkeypatch.setattr(sw_drawing._MODULE, "VARIANT", Array)
     view = View()
-    assert sw_drawing._MODULE._set_view_center(view, (.16, .13)) == [.16, .13]
+    assert sw_drawing.set_view_position(view, (.16, .13)) == [.16, .13]
 
 
 def test_old_center_mark_member_fallback():
@@ -42,3 +42,18 @@ def test_present_member_failure_is_not_suppressed():
             raise RuntimeError("read failed")
     with pytest.raises(RuntimeError, match="read failed"):
         sw_drawing.first_center_mark(View())
+
+
+def test_independent_type7_standard_views_are_all_mapped():
+    class View:
+        Type = 7
+        def __init__(self, name):
+            self.Name = name
+        def GetOrientationName(self):
+            return '*'+self.Name
+        def GetBaseView(self):
+            return None
+    mapped, _, method = sw_drawing._MODULE._map_standard_views_from_sheet_views(
+        [View('Front'), View('Top'), View('Right'), View('Isometric')])
+    assert set(mapped) == {'front','top','right'}
+    assert method == 'orientation_name'

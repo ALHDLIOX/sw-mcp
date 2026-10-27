@@ -21,6 +21,17 @@ def test_drawing_mcp_tools_are_registered():
     tools = server.mcp._tool_manager._tools
 
     assert {"solidworks_generate_drawing", "solidworks_review_drawing", "solidworks_inspect_drawing"} <= set(tools)
+    assert "solidworks_generate_drawing_from_recipe" in tools
+
+
+def test_recipe_tool_uses_same_validated_example_and_rejects_invalid_json(tmp_path):
+    recipe = ROOT / 'examples/peek_bracket_drawing.json'
+    params = server.SolidWorksDrawingRecipeInput(recipe_path=str(recipe),output_dir=str(tmp_path),version=2024)
+    assert Path(params.recipe_path) == recipe
+    broken = tmp_path/'broken.json'
+    broken.write_text('{}',encoding='utf-8')
+    with pytest.raises(ValueError):
+        server.SolidWorksDrawingRecipeInput(recipe_path=str(broken),output_dir=str(tmp_path))
 
 
 def test_release_mcp_gate_requires_drawing_tools():

@@ -385,9 +385,11 @@ def add_real_thread_feature(model, params: ThreadedHoleParams):
         ("ThreadMethod", SW_THREAD_METHOD_CUT),
         ("EndCondition", end_condition),
         end_value,
-        ("Pitch", mm(params.pitch_mm)),
         ("Size", params.thread_label),
         ("PitchOverride", True),
+        # SW2024 ignores Pitch until the override is enabled (leaving 10 mm).
+        # Select the profile/size first, enable override, then assign the value.
+        ("Pitch", mm(params.pitch_mm)),
         ("DiameterOverride", False),
         ("RightHanded", params.right_handed),
     ):
@@ -397,6 +399,8 @@ def add_real_thread_feature(model, params: ThreadedHoleParams):
         except Exception as exc:
             print(f"WARN 设置 {attr} 失败: {exc}")
 
+    if not math.isclose(float(thread_data.Pitch), mm(params.pitch_mm), rel_tol=0.0, abs_tol=1e-10):
+        raise RuntimeError("Thread 螺距回读不一致，已阻止创建错误螺纹")
     feature = model.FeatureManager.CreateFeature(thread_data)
     if feature is None:
         raise RuntimeError("CreateFeature(ThreadFeatureData) 返回 None")

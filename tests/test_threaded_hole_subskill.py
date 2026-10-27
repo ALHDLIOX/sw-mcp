@@ -178,6 +178,26 @@ def test_real_thread_uses_official_edge_mark_without_start_entity(monkeypatch) -
     assert model.FeatureManager.data.DiameterOverride is False
 
 
+def test_pitch_is_assigned_after_size_and_override(monkeypatch):
+    """Reproduce SW2024's silent 10-mm default when Pitch is set too early."""
+    class OrderedData(FakeThreadData):
+        PitchOverride = False
+        _pitch = .01
+        @property
+        def Pitch(self):
+            return self._pitch
+        @Pitch.setter
+        def Pitch(self, value):
+            if self.PitchOverride:
+                self._pitch = value
+    model = FakeThreadModel()
+    model.FeatureManager.data = OrderedData()
+    monkeypatch.setattr(threaded,'locate_hole_mouth_edge',lambda *a,**kw:(FakeThreadEdge(),(0,0,0)))
+    params = threaded.build_params(make_args(thread='M3',thread_depth=6,pilot_depth=7))
+    threaded.add_real_thread_feature(model,params)
+    assert model.FeatureManager.data.Pitch == .0005
+
+
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [

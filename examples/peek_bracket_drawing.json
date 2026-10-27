@@ -1,0 +1,491 @@
+{
+  "recipeVersion": "1.0",
+  "sourceModel": "PEEK_CONNECTING_BRACKET.SLDPRT",
+  "modelSizeMm": [
+    40,
+    13,
+    40
+  ],
+  "basename": "PEEK_CONNECTING_BRACKET_SIMPLE",
+  "scale": 2,
+  "standard": "ISO",
+  "views": [
+    {
+      "name": "Front",
+      "positionMm": [
+        180,
+        187
+      ],
+      "centerMarks": 2
+    },
+    {
+      "name": "Top",
+      "positionMm": [
+        180,
+        92
+      ],
+      "centerMarks": 4
+    },
+    {
+      "name": "Right",
+      "positionMm": [
+        80,
+        187
+      ]
+    },
+    {
+      "name": "Isometric",
+      "positionMm": [
+        335,
+        185
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "F_THREAD_PITCH",
+      "view": "Front",
+      "kind": "horizontal",
+      "entities": [
+        {
+          "type": "circle",
+          "centerMm": [
+            -8.75,
+            9,
+            40
+          ],
+          "radiusMm": 1.25
+        },
+        {
+          "type": "circle",
+          "centerMm": [
+            8.75,
+            9,
+            40
+          ],
+          "radiusMm": 1.25
+        }
+      ],
+      "positionMm": [
+        180,
+        225
+      ],
+      "expectedMm": 17.5
+    },
+    {
+      "id": "F_THREAD_TOP_EDGE",
+      "view": "Front",
+      "kind": "vertical",
+      "entities": [
+        {
+          "type": "circle",
+          "centerMm": [
+            -8.75,
+            9,
+            40
+          ],
+          "radiusMm": 1.25
+        },
+        {
+          "type": "line",
+          "startMm": [
+            -12.5,
+            13,
+            40
+          ],
+          "endMm": [
+            12.5,
+            13,
+            40
+          ]
+        }
+      ],
+      "positionMm": [
+        135,
+        198
+      ],
+      "expectedMm": 4
+    },
+    {
+      "id": "F_THREAD_SHOULDER",
+      "view": "Front",
+      "kind": "horizontal",
+      "entities": [
+        {
+          "type": "circle",
+          "centerMm": [
+            -8.75,
+            9,
+            40
+          ],
+          "radiusMm": 1.25
+        },
+        {
+          "type": "line",
+          "startMm": [
+            -12.5,
+            5,
+            40
+          ],
+          "endMm": [
+            -12.5,
+            13,
+            40
+          ]
+        }
+      ],
+      "positionMm": [
+        157,
+        165
+      ],
+      "expectedMm": 3.75
+    },
+    {
+      "id": "R_BASE_THICKNESS",
+      "view": "Right",
+      "kind": "vertical",
+      "entities": [
+        {
+          "type": "vertex",
+          "pointMm": [
+            20,
+            0,
+            40
+          ]
+        },
+        {
+          "type": "vertex",
+          "pointMm": [
+            20,
+            5,
+            40
+          ]
+        }
+      ],
+      "positionMm": [
+        27,
+        179
+      ],
+      "expectedMm": 5
+    },
+    {
+      "id": "R_RAISED_HEIGHT",
+      "view": "Right",
+      "kind": "vertical",
+      "entities": [
+        {
+          "type": "vertex",
+          "pointMm": [
+            20,
+            5,
+            40
+          ]
+        },
+        {
+          "type": "vertex",
+          "pointMm": [
+            12.5,
+            13,
+            40
+          ]
+        }
+      ],
+      "positionMm": [
+        27,
+        194
+      ],
+      "expectedMm": 8
+    },
+    {
+      "id": "T_WIDTH",
+      "view": "Top",
+      "kind": "horizontal",
+      "entities": [
+        {
+          "type": "line",
+          "startMm": [
+            -20,
+            5,
+            0
+          ],
+          "endMm": [
+            -20,
+            5,
+            40
+          ]
+        },
+        {
+          "type": "line",
+          "startMm": [
+            20,
+            5,
+            0
+          ],
+          "endMm": [
+            20,
+            5,
+            40
+          ]
+        }
+      ],
+      "positionMm": [
+        180,
+        28
+      ],
+      "expectedMm": 40
+    },
+    {
+      "id": "T_LENGTH",
+      "view": "Top",
+      "kind": "vertical",
+      "entities": [
+        {
+          "type": "vertex",
+          "pointMm": [
+            -20,
+            5,
+            0
+          ]
+        },
+        {
+          "type": "vertex",
+          "pointMm": [
+            -20,
+            5,
+            40
+          ]
+        }
+      ],
+      "positionMm": [
+        112,
+        92
+      ],
+      "expectedMm": 40
+    },
+    {
+      "id": "T_RIB_WIDTH",
+      "view": "Top",
+      "kind": "horizontal",
+      "entities": [
+        {
+          "type": "line",
+          "startMm": [
+            -12.5,
+            13,
+            0
+          ],
+          "endMm": [
+            -12.5,
+            13,
+            40
+          ]
+        },
+        {
+          "type": "line",
+          "startMm": [
+            12.5,
+            13,
+            0
+          ],
+          "endMm": [
+            12.5,
+            13,
+            40
+          ]
+        }
+      ],
+      "positionMm": [
+        180,
+        155
+      ],
+      "expectedMm": 25
+    },
+    {
+      "id": "T_SHOULDER",
+      "view": "Top",
+      "kind": "horizontal",
+      "entities": [
+        {
+          "type": "line",
+          "startMm": [
+            -20,
+            5,
+            0
+          ],
+          "endMm": [
+            -20,
+            5,
+            40
+          ]
+        },
+        {
+          "type": "line",
+          "startMm": [
+            -12.5,
+            13,
+            0
+          ],
+          "endMm": [
+            -12.5,
+            13,
+            40
+          ]
+        }
+      ],
+      "positionMm": [
+        146,
+        143
+      ],
+      "expectedMm": 7.5
+    },
+    {
+      "id": "T_HOLE_EDGE_X",
+      "view": "Top",
+      "kind": "horizontal",
+      "entities": [
+        {
+          "type": "line",
+          "startMm": [
+            -20,
+            5,
+            0
+          ],
+          "endMm": [
+            -20,
+            5,
+            40
+          ]
+        },
+        {
+          "type": "circle",
+          "centerMm": [
+            -16,
+            5,
+            36
+          ],
+          "radiusMm": 1.75
+        }
+      ],
+      "positionMm": [
+        144,
+        41
+      ],
+      "expectedMm": 4
+    },
+    {
+      "id": "T_HOLE_EDGE_Z",
+      "view": "Top",
+      "kind": "vertical",
+      "entities": [
+        {
+          "type": "circle",
+          "centerMm": [
+            -16,
+            5,
+            4
+          ],
+          "radiusMm": 1.75
+        },
+        {
+          "type": "vertex",
+          "pointMm": [
+            -20,
+            5,
+            0
+          ]
+        }
+      ],
+      "positionMm": [
+        126,
+        130
+      ],
+      "expectedMm": 4
+    },
+    {
+      "id": "T_HOLE_DIAMETER",
+      "view": "Top",
+      "kind": "diameter",
+      "entities": [
+        {
+          "type": "circle",
+          "centerMm": [
+            -16,
+            5,
+            4
+          ],
+          "radiusMm": 1.75
+        }
+      ],
+      "positionMm": [
+        61,
+        109
+      ],
+      "expectedMm": 3.5,
+      "prefix": "4X Ø",
+      "suffix": " THRU"
+    }
+  ],
+  "titleBlock": {
+    "title": "PEEK CONNECTING BRACKET",
+    "drawingNumber": "PCB-001",
+    "material": "TBD",
+    "date": "2026-10-27"
+  },
+  "notes": [
+    {
+      "text": "2X M3x0.5 DEPTH 6",
+      "positionMm": [
+        65,
+        245
+      ],
+      "view": "Front",
+      "entity": {
+        "type": "circle",
+        "centerMm": [
+          -8.75,
+          9,
+          40
+        ],
+        "radiusMm": 1.25
+      },
+      "heightMm": 3.2
+    },
+    {
+      "text": "PEEK CONNECTING BRACKET / REVIEW A",
+      "positionMm": [
+        25,
+        274
+      ],
+      "heightMm": 4
+    },
+    {
+      "text": "UNITS: mm; FIRST ANGLE PROJECTION",
+      "positionMm": [
+        25,
+        47
+      ]
+    },
+    {
+      "text": "MATERIAL / FINISH / TOLERANCES: TBD",
+      "positionMm": [
+        25,
+        40
+      ]
+    },
+    {
+      "text": "REVIEW ONLY - VERIFY BEFORE MANUFACTURE",
+      "positionMm": [
+        25,
+        33
+      ]
+    },
+    {
+      "text": "TAP DRILL: D2.5 DEPTH 7 (MODEL ALLOWANCE; VERIFY)",
+      "positionMm": [
+        25,
+        24
+      ],
+      "heightMm": 2.5
+    }
+  ]
+}

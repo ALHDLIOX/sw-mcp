@@ -686,8 +686,6 @@ def _with_rendered_note_boxes(structure: Mapping[str, Any], note_report: Mapping
     pages = {int(page.get("page")): page for page in (pdf_payload.get("pages") or [])}
     matches = list(note_report.get("pdf_matches") or [])
     for note in notes:
-        if note.get("box"):
-            continue
         text = str(note.get("text") or "")
         match = next((item for item in matches if item.get("text") == text), None)
         if not match or int(match.get("page", 0)) not in pages:
@@ -696,6 +694,11 @@ def _with_rendered_note_boxes(structure: Mapping[str, Any], note_report: Mapping
         page_width = float(page["widthPt"])
         page_height = float(page["heightPt"])
         left, top, right, bottom = (float(value) for value in match["bbox_pt"])
+        # INote.GetExtent may enclose its leader all the way to the attached
+        # hole. That is not a text/view collision. Keep native evidence and
+        # prefer actual PDF glyph bounds when a text match exists.
+        if note.get("box"):
+            note["native_annotation_extent"] = dict(note["box"])
         note["box"] = {
             "left": left / page_width * width_m,
             "bottom": (page_height - bottom) / page_height * height_m,

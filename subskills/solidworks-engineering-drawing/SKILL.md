@@ -26,6 +26,10 @@ metadata: { "openclaw": { "os": ["win32"], "requires": { "anyBins": ["python", "
 
 ## 工作流
 
+已有原生零件、需要关联尺寸/轴测图/简洁标题栏时，优先使用 `scripts/draw_from_recipe.py` 或 MCP `solidworks_generate_drawing_from_recipe`。读取 [配方流程](references/recipe-workflow.md)，选择已有 JSON 或仅新增 JSON；执行器负责视图定位、原生尺寸、中心标记、保存重开、PDF 与预览，禁止逐案复制 `.runtime` Python 修补脚本。用户指定的企业模板或复杂剖视/BOM 继续走下面的 DrawingSpec 路线。
+
+配方入口默认 A3 横向、第一角投影、简洁六字段标题栏；不自动填入长文件名、模型描述或签审表格。它只承诺配方声明的有限几何选择与标注，不声称能直接理解任意图片或自动完成全部尺寸设计。
+
 1. 读取并校验 `schemas/drawing_spec.schema.json`。
 2. 运行根技能的 SolidWorks preflight 和能力探测。
 3. 选择图框，创建图纸页，回读图幅和投影法。
@@ -37,6 +41,7 @@ metadata: { "openclaw": { "os": ["win32"], "requires": { "anyBins": ["python", "
 
 - 零件和装配工程图为 pilot：跨版本真机回归仍在持续；但在 PDF 尺寸文字框、视图边界、尺寸链、孔表和 BOM 证据全部通过时，工具会返回 `pass`，不会因 COM 缺少原生文字框而无条件降级。
 - 通用 MCP 生成器当前只可靠执行空配置的 `front/top/right` 三视图、显式且可容纳的比例、模型尺寸导入、注释和模板化 BOM。轴测、剖视、局部视图、指定 ID 尺寸、孔标注/孔表、标题栏业务字段和钣金专用选项必须在修改文档前返回 `DRAWING_SPEC_CAPABILITY_UNSUPPORTED`，由专项脚本执行。
+- 新配方入口支持 Front/Top/Right/Isometric、几何端点/圆心选择、水平/垂直/直径尺寸、关联说明引线与简洁标题栏；不改变上述旧 DrawingSpec 工具的兼容契约。配方能力缺口必须明确报错，不回退成普通文字冒充尺寸实体。
 - 审查器按尺寸 ID/视图/种类/数值、孔规格/数量/位置、真实 BOM 类型/数据行/配置及标题栏字段回读做结构化核验；模板候选、任意表格或模糊子串不能作为通过证据。
 - `professionalAnnotations` 可声明中心标记、中心线、孔标注、基准、GD&T、表面粗糙度和焊接符号。审查器只接受 SolidWorks 专用实体回读；普通 Note 文字不能替代。
 - 通用生成器已支持 `centerMarks` 自动写入：每项必须声明 `id`、标准视图、期望总数和 `targets`（`holes`/`fillets`/`slots`），并通过 `GetFirstCenterMark2/GetNext` 实体回读。SW2026 真机确认新建工程图需首次保存后再插入；未保存状态下 API 可能返回 `True` 但实体暂不可回读，封装会保持失败。其余专业标注仍保持能力阻断。
