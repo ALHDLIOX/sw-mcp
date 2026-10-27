@@ -22,20 +22,32 @@
   只读审计凭据读不到。因此改由**离线采集 + 签名证明**承担，CI 只做只读校验，详见
   [`docs/architecture/governance-attestation.md`](docs/architecture/governance-attestation.md)
 - **该证明由维护者自行签发，公钥信任根存放于本仓库**，只提供防篡改留痕，**不构成独立审计、独立审批或双人复核**
+- 仓库变量 `GOVERNANCE_TRUST_ROOT_ANCHOR` 提供仓库文件之外的第二道锚点，可阻止"公钥 + 日志 + 证明"被整体替换；
+  但拥有仓库管理员权限者仍可一并修改该变量，因此它只是提高成本，不是独立可信根
+- `.github/CODEOWNERS` 已声明治理敏感路径的负责人，但 `require_code_owner_review = false`，
+  **文件本身不构成强制门禁**（单人仓库开启会因"作者不能批准自己的 PR"而死锁）
+- `test-and-build` 已包含 `node --test tests/test_cad_ci_guard.cjs` 与
+  `node scripts/ci/check_governance_drift.cjs`；后者只能把治理代码改动变成显式差异，**不能阻止有合并权者一并修改**
 - **在上述调整完成并实际验证之前，不得对外声称本仓库具备独立审批能力或强制 CI 门禁**
 
-上述限制的跟踪条目见发布阻断清单 B-02。
+上述限制的跟踪条目见发布阻断清单 B-02。治理代码、工作流与信任根的修改仍需维护者人工确认。
 
 ### 维护者：规则集变更后必须重新采集证明
 
-任何 ruleset 修改（含清空 `bypass_actors`）都会让 `updated_at` 变化，**旧证明立即失效**，远程 CAD 准入随之阻断。
-变更后需在本机执行一次采集并随 PR 提交新证明：
+任何 ruleset 修改（含清空 `bypass_actors`）都会让 `updated_at` 与两个摘要（`policy_digest` / `snapshot_digest`）
+同时变化，**旧证明立即失效**，远程 CAD 准入随之阻断。变更后需在本机执行一次采集并随 PR 提交新证明：
 
 ```bash
-GH_TOKEN=... node scripts/ci/capture_governance_attestation.cjs
+GH_TOKEN="$(gh auth token)" node scripts/ci/capture_governance_attestation.cjs --verify
 ```
 
-私钥仅存于本机 `~/.cad-governance/`，不得入库、不得写入 CI。完整流程与密钥轮换步骤见上述文档。
+采集工具在远端状态不合规时**默认拒签**（不写文件、非零退出）。若确需记录非合规状态用于诊断，
+使用 `--allow-noncompliant`，产物会标记 `compliant: false`，永远无法通过准入。
+
+改完信任根或证明后，还需运行 `node scripts/ci/check_governance_drift.cjs --update` 并一并提交清单，
+否则 `test-and-build` 会因漂移而失败。
+
+私钥仅存于本机 `%USERPROFILE%\.cad-governance\`，不得入库、不得写入 CI。完整流程、双摘要语义与密钥轮换步骤见上述文档。
 
 ## 如何贡献
 
@@ -131,9 +143,16 @@ GH_TOKEN=... node scripts/ci/capture_governance_attestation.cjs
 
 ### 4. CI 检查
 
-- PR 必须通过 `test-and-build` 状态检查
+- PR 必须通过 `test-and-build` 状态检查（ruleset `protect-main` 的实际必需检查名）
+- 该检查当前包含：`pytest` 全量、skill/MCP/release 校验、工作台前后端测试与构建，
+  以及**治理门禁自检**——`node --test tests/test_cad_ci_guard.cjs`（91 项）与
+  `node scripts/ci/check_governance_drift.cjs`（10 个敏感文件的漂移检测）
+- **改动 `scripts/ci/`、`.github/workflows/`、`tests/test_cad_ci_guard.cjs`、
+  `docs/architecture/evidence/` 或信任根时**，必须运行 `check_governance_drift.cjs --update`
+  并一并提交 `.github/governance-sensitive-manifest.json`，否则该检查会阻断
 - **本地通过不能替代 CI 通过**。两者结论不一致时，以 CI 为准并排查差异
-- 注意：当前 owner 具备绕过 CI 的能力（见「当前治理限制」），这是已记录的治理缺口，不代表 CI 检查可被忽视
+- 注意：owner 当前仍在 ruleset `bypass_actors` 中（`bypass_mode = always`），这是已记录的治理缺口。
+  **这不代表 CI 检查可被忽视**，也不构成"已强制门禁"的对外表述依据
 
 ### 5. 代码审查维度
 

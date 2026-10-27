@@ -26,6 +26,23 @@
 
 本文件第 3 条、第 5 条及「实际 GitHub 设置与人工配置条件」中的审批人描述均须按新标准阅读。
 
+**2026-10-27 补充（全量收口 V2 / B1）**：治理链再收紧一轮，准入检查由 24 项增至 **28 项**：
+
+- **信任锚点**：新增 `trust_root_anchor`，读取仓库变量 `GOVERNANCE_TRUST_ROOT_ANCHOR` 并与实际信任根比对。
+  它阻止"公钥 + 轮换日志 + 证明"被整体替换；缺失、格式非法或不匹配一律阻断。
+  局限：有仓库管理员权限者可连变量一起改，故仍**不是**独立可信根
+- **双摘要**：原单一 `config_digest` 拆为 `policy_digest`（规则内容，不含 bypass）与
+  `snapshot_digest`（含 bypass 与 `updated_at`）。**不得用前者未变声称完整配置未变**
+- **合规字段**：证明新增 `compliant` / `noncompliance_reasons` 并纳入签名载荷；采集工具在远端不合规时
+  **默认拒签**（不写文件、非零退出），校验侧严格要求 `compliant === true` 且与重算结果一致
+- **轮换日志**：退役密钥必须显式 `revoked_at`，缺失不视为已撤销；`KEYS` 与日志双向一致
+- **CODEOWNERS 降级**：新增 `.github/CODEOWNERS` 声明责任人，但 `require_code_owner_review` 维持 `false`。
+  **文件本身不构成强制门禁**，治理风险披露 `code_owner_review_not_enforced`
+- **漂移检测**：`check_governance_drift.cjs` 纳入 `test-and-build`，把治理代码/工作流/信任根/证明的改动
+  变成显式差异。它**不能阻止**有合并权者一并修改，故治理风险披露 `trusted_baseline_workflow_not_established`
+
+规格细节（字段、失效规则、轮换步骤）以 [`governance-attestation.md`](governance-attestation.md) 为唯一定义源。
+
 **剩余风险（未消除，须书面接受）**：① 无独立复核，合并质量依赖维护者单点判断；② Environment 无第二审批人，部署审批实际不可由他人把关；③ 维护者作为管理员仍可临时修改 ruleset，任何 GitHub 配置都无法消除该固有权力；④ 外部 PR 审查在 GitHub 侧可能无 review 留痕，需靠流程约定或 `required_review_thread_resolution` 补足。
 
 **未变**：远程 CAD CI 的 Environment / Runner / Secret 前提与执行证据要求不变；本调整**不解除** B-01。

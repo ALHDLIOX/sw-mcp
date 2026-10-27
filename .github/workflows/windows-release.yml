@@ -30,6 +30,13 @@ jobs:
         with:
           toolchain: "1.88.0"
           components: rustfmt, clippy
+      # @brief 治理门禁自检。这两项必须留在 test-and-build 之内：否则一个削弱 guard 的 PR
+      #        可以通过必需状态检查正常合并，使准入判定失去意义。
+      #        注意本步骤只能检测漂移、不能阻止有合并权者一并修改这些文件。
+      - name: Check governance gate integrity
+        run: |
+          node --test tests/test_cad_ci_guard.cjs
+          node scripts/ci/check_governance_drift.cjs
       - name: Install Python test dependencies
         run: python -m pip install pytest -r requirements.txt -r mcp-server/requirements.txt
       - name: Verify Python runtime contracts

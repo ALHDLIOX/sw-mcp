@@ -1,0 +1,15 @@
+{
+  "schema": "governance-sensitive-manifest/v1",
+  "files": {
+    ".github/CODEOWNERS": "8a0367d308c85c1a5c2e06113737d0902ab700470e7a4110b3135f658b867d81",
+    ".github/workflows/windows-cad-regression.yml": "93faf8bcf8b82b65649fd37aa17b9f364ddbb66bcb74f30304750b746d007cbc",
+    ".github/workflows/windows-release.yml": "d63580b28f52a0cfc87d1954da66cf910db88e1dd48719bbf78877f2efd2a0f9",
+    "docs/architecture/evidence/governance-ruleset-attestation.json": "bb48a2a6725b54feb29e9ed332529483c61df69d96d53366b77fb31271ca4352",
+    "scripts/ci/cad_ci_guard.cjs": "b1d876243c1478ae6d07f703df5819dd1f3efeac43d5a996c2997103183a3fab",
+    "scripts/ci/capture_governance_attestation.cjs": "2d24b64e69a2aff2c3ce93c8b81ede3fcdef3cfba94354aa2f06ce293a84a4eb",
+    "scripts/ci/check_governance_drift.cjs": "344ce6279212b1d544a5608a4c60f02bfe264b5dd3ca47cf96f428b12db27d79",
+    "scripts/ci/governance_attestation.cjs": "8dbe427028e5fa41c7ae2466158fde41658e38f6bb5bf90d453aa0870ca1dd6e",
+    "scripts/ci/governance_trust_root.cjs": "16c4db7164dc4262156d858b7a541b9fab353b50a0260503781a9dee99e09fbd",
+    "tests/test_cad_ci_guard.cjs": "07a6330c463c1ba8315688cea78eec5fb374517523aec3d5b3aaf8cbd6d83a00"
+  }
+}

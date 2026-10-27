@@ -9,9 +9,16 @@
  * 轮换流程：
  *   1. 本机生成新密钥对，私钥留在 `%USERPROFILE%\\.cad-governance\\`，永不入库；
  *   2. 在 KEYS 中**新增**条目（不得删除旧条目），并 append 到 ROTATION_LOG；
- *   3. 需要废止旧 key 时，只设置 `revoked_at`，条目本身保留；
- *   4. 重新采集证明（旧证明在新配置下会因 updated_at/署名不符而失效）。
+ *   3. 需要废止旧 key 时，必须设置 `revoked_at`。缺失字段不被视为已撤销：退役但未撤销会让
+ *      `trust_root_rotation_log` 检查失败并全员阻断；
+ *   4. 同步更新仓库变量 `GOVERNANCE_TRUST_ROOT_ANCHOR`（用 governance_attestation.cjs 的
+ *      `trustRootAnchor()` 计算），否则 `trust_root_anchor` 检查失败；
+ *   5. 重新采集证明（旧证明在新配置下会因摘要与署名不符而失效）。
  * 删除 KEYS 中仍被 ROTATION_LOG 引用的条目会让 `trust_root_intact` 失败，从而全员阻断。
+ *
+ * 锚点边界：仓库变量在仓库文件之外，故"同时改公钥 + 改日志 + 重签证明"这一整组操作会与锚点
+ * 不符而被拒。但拥有仓库管理员权限的人可以连变量一起改，所以锚点只是提高成本、留下痕迹，
+ * 仍**不是**独立可信根。
  */
 
 /** @brief 已固定公钥。每个条目一经加入即保留，只允许追加或标记 revoked_at。 */
