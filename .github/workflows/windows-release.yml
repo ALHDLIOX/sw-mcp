@@ -270,17 +270,19 @@ jobs:
           RESULT_RUST: ${{ needs.rust_tests.result }}
           RESULT_PACKAGE: ${{ needs.package_build.result }}
         run: |
-          $results = [ordered]@{
-            governance    = $env:RESULT_GOVERNANCE
-            python-tests  = $env:RESULT_PYTHON
-            frontend-tests = $env:RESULT_FRONTEND
-            rust-tests    = $env:RESULT_RUST
-            package-build = $env:RESULT_PACKAGE
-          }
+          # @brief 用数组而不是哈希表：作业名含连字符，未加引号的哈希键会让 PowerShell 解析失败。
+          $checks = @(
+            "governance=$env:RESULT_GOVERNANCE"
+            "python-tests=$env:RESULT_PYTHON"
+            "frontend-tests=$env:RESULT_FRONTEND"
+            "rust-tests=$env:RESULT_RUST"
+            "package-build=$env:RESULT_PACKAGE"
+          )
           $notPassed = @()
-          foreach ($name in $results.Keys) {
-            Write-Output ("{0,-16} {1}" -f $name, $results[$name])
-            if ($results[$name] -ne "success") { $notPassed += $name }
+          foreach ($check in $checks) {
+            $parts = $check -split "=", 2
+            Write-Output ("{0,-16} {1}" -f $parts[0], $parts[1])
+            if ($parts[1] -ne "success") { $notPassed += $parts[0] }
           }
           if ($notPassed.Count -gt 0) {
             throw ("必需作业未全部成功: {0}" -f ($notPassed -join ", "))

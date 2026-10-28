@@ -159,6 +159,18 @@ def test_package_diagnostics_upload_is_unconditional():
     assert "if: always()" in package
 
 
+def test_aggregator_step_has_no_unquoted_hyphenated_ps_keys():
+    """PowerShell 哈希表键含连字符且未加引号会直接解析失败（2026-10-28 真实踩过）。
+
+    这里只锁定"不要写出未加引号的连字符赋值"这一条，避免门禁因为脚本语法错误变红。
+    """
+    _, block = _required_job()
+    joined = _joined(block)
+    offenders = [line.strip() for line in joined.splitlines()
+                 if re.match(r"^\s*[A-Za-z0-9_]+-[A-Za-z0-9-]+\s*=(?!=)", line)]
+    assert not offenders, f"聚合作业脚本含未加引号的连字符键赋值（PowerShell 解析会失败）: {offenders}"
+
+
 def test_pull_request_runs_cancel_superseded_commits():
     """同一 PR 的旧运行应被取消，避免排队等待已过期提交。"""
     block = _joined(_top_level_block(_lines(), "concurrency"))
