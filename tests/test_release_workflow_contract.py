@@ -2,9 +2,11 @@
 
 这些不变量一旦被无意改掉，后果都是"静默失效"而不是显式报错：
 - 缺少 `merge_group` 触发器 → merge queue 条目等不到必需检查，队列超时；
-- `test-and-build` 作业被改名或删除 → ruleset 要求的必需检查上下文消失，门禁失效；
+- `test-and-build` 显示名被改 → ruleset 要求的必需检查上下文消失，门禁失效；
 - `test-and-build` 不再 `needs` 全部作业 → 某个子作业失败也能拿到绿灯；
-- 作业缺少 `timeout-minutes` → 悬挂运行占用额度直到 6 小时默认上限。
+- 作业缺 `timeout-minutes` → 悬挂运行占用额度直到 6 小时默认上限；
+- 用 `needs.some-job.result` 取结论 → 连字符被解析成减法，取到空值，
+  聚合判定必然误判失败（2026-10-28 真实踩过这个坑）。
 
 因此这里用结构化断言把它们固定下来，而不是靠评审时的记忆。
 为避免引入新依赖（仓库未声明 PyYAML），本文件只做缩进感知的行级解析，不做通用 YAML 解析。
@@ -16,7 +18,16 @@ from pathlib import Path
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "windows-release.yml"
 JOB_LINE = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
+NEEDS_EXPR = re.compile(r"needs\.([A-Za-z0-9_-]+)\.result")
 REQUIRED_CHECK = "test-and-build"
+EXPECTED_JOBS = {
+    "governance",
+    "python_tests",
+    "frontend_tests",
+    "rust_tests",
+    "package_build",
+    "test_and_build",
+}
 
 
 def _lines() -> list[str]:
@@ -32,9 +43,7 @@ def _block(lines: list[str], start: int) -> list[str]:
             block.append(line)
             continue
         current = len(line) - len(line.lstrip())
-        if current <= indent and re.match(r"^[^\s#]", line.lstrip()) is None:
-            break
-        if current <= indent and line.strip() and not line.startswith(" " * (indent + 1)):
+        if current <= indent and not line.startswith(" " * (indent + 1)):
             break
         block.append(line)
     return block
@@ -66,38 +75,66 @@ def _joined(block: list[str]) -> str:
     return "\n".join(block)
 
 
+def _required_job() -> tuple[str, list[str]]:
+    """@brief 按显示名定位必需检查作业：门禁认的是显示名，不是作业 id。"""
+    for job_id, block in _jobs(_lines()).items():
+        if f"name: {REQUIRED_CHECK}" in _joined(block):
+            return job_id, block
+    raise AssertionError(f"没有显示名为 {REQUIRED_CHECK} 的作业：ruleset 的必需检查将永久 pending")
+
+
 def test_workflow_declares_merge_group_trigger():
     """merge queue 依赖 merge_group 事件；缺失会让队列条目永远等不到必需检查。"""
     block = _joined(_top_level_block(_lines(), "on"))
     assert "merge_group:" in block, "缺少 merge_group 触发器，merge queue 将无法获得必需检查"
 
 
-def test_required_check_job_exists_with_expected_name():
-    """ruleset 要求的上下文是 test-and-build；作业名或键名变化都会让门禁静默失效。"""
+def test_required_check_job_exists_with_expected_display_name():
+    """ruleset 要求的上下文是 test-and-build，改名或删除都会让门禁静默失效。"""
+    _required_job()
+
+
+def test_job_ids_are_the_expected_simple_identifiers():
+    """表达式里只能安全引用不含连字符的作业 id。"""
+    assert set(_jobs(_lines())) == EXPECTED_JOBS
+
+
+def test_needs_expressions_reference_identifier_safe_jobs():
+    """`needs.some-job.result` 会被解析成减法而取到空值，必须用下划线 id。"""
     jobs = _jobs(_lines())
-    assert REQUIRED_CHECK in jobs, f"缺少作业 {REQUIRED_CHECK}"
-    assert f"name: {REQUIRED_CHECK}" in _joined(jobs[REQUIRED_CHECK]), (
-        "作业显示名必须与 ruleset 要求的上下文一致"
-    )
+    # 注释里可以出现反例说明，只检查实际生效的表达式行。
+    code_lines = [line for line in WORKFLOW.read_text(encoding="utf-8").splitlines()
+                  if not line.lstrip().startswith("#")]
+    found = 0
+    for line in code_lines:
+        for match in NEEDS_EXPR.finditer(line):
+            found += 1
+            referenced = match.group(1)
+            assert "-" not in referenced, f"needs 表达式使用了含连字符的作业 id: {referenced}"
+            assert referenced in jobs, f"needs 表达式引用了不存在的作业: {referenced}"
+    assert found >= len(jobs) - 1, "必需检查作业必须逐个读取全部前置作业的结论"
 
 
 def test_required_check_job_depends_on_every_other_job():
     """任一子作业失败时，必需检查必须随之失败，而不是拿到独立绿灯。"""
-    jobs = _jobs(_lines())
-    block = _joined(jobs[REQUIRED_CHECK])
-    needs_match = re.search(r"needs:\s*\[([^\]]*)\]", block)
-    assert needs_match, "test-and-build 必须以行内列表声明 needs"
+    job_id, block = _required_job()
+    needs_match = re.search(r"needs:\s*\[([^\]]*)\]", _joined(block))
+    assert needs_match, "必需检查作业必须以行内列表声明 needs"
     needs = {item.strip() for item in needs_match.group(1).split(",") if item.strip()}
-    expected = set(jobs) - {REQUIRED_CHECK}
+    expected = set(_jobs(_lines())) - {job_id}
     assert needs == expected, f"needs 与作业集合不一致：缺少 {expected - needs}，多出 {needs - expected}"
 
 
 def test_required_check_job_reports_failure_instead_of_being_skipped():
     """上游失败时若本作业被 skipped，会被误读为"未运行"；必须显式判定并报 failure。"""
-    block = _joined(_jobs(_lines())[REQUIRED_CHECK])
-    assert "if: always()" in block, "必需检查作业必须使用 if: always() 保证始终给出结论"
-    for job in ("governance", "python-tests", "frontend-tests", "rust-tests", "package-build"):
-        assert f"needs.{job}.result" in block, f"必需检查未读取 {job} 的结论"
+    _, block = _required_job()
+    joined = _joined(block)
+    assert "if: always()" in joined, "必需检查作业必须使用 if: always() 保证始终给出结论"
+    referenced = set(NEEDS_EXPR.findall(WORKFLOW.read_text(encoding="utf-8")))
+    for job_id in _jobs(_lines()):
+        if job_id == _required_job()[0]:
+            continue
+        assert job_id in referenced, f"必需检查未读取 {job_id} 的结论"
 
 
 def test_every_job_has_timeout():
@@ -109,17 +146,15 @@ def test_every_job_has_timeout():
 
 def test_end_to_end_steps_retry_once_and_keep_first_diagnostics():
     """端到端允许重试 1 次以吸收启动竞态，但必须保留第 1 次诊断，不能掩盖稳定失败。"""
-    jobs = _jobs(_lines())
-    package = _joined(jobs["package-build"])
+    package = _joined(_jobs(_lines())["package_build"])
     assert "e2e-diagnostics.attempt1" in package, "重试前必须保留第 1 次诊断文件"
     assert "重试 1 次" in package, "重试行为必须在日志中显式说明"
-    # 重试后仍失败必须抛错，不允许仅打印警告就通过
     assert "throw" in package, "重试后仍失败必须抛出错误"
 
 
 def test_package_diagnostics_upload_is_unconditional():
     """失败时恰好最需要现场：诊断上传不能只在成功路径执行。"""
-    package = _joined(_jobs(_lines())["package-build"])
+    package = _joined(_jobs(_lines())["package_build"])
     assert "Upload package startup diagnostics" in package
     assert "if: always()" in package
 

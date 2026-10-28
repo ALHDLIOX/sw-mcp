@@ -40,7 +40,7 @@ jobs:
           node scripts/ci/check_governance_drift.cjs
 
   # ---------------------------------------------------------------- Python 侧
-  python-tests:
+  python_tests:
     name: python-tests
     runs-on: windows-2022
     timeout-minutes: 25
@@ -66,7 +66,7 @@ jobs:
         run: python scripts/release_check.py
 
   # ---------------------------------------------------------------- 前端侧
-  frontend-tests:
+  frontend_tests:
     name: frontend-tests
     runs-on: windows-2022
     timeout-minutes: 20
@@ -90,7 +90,7 @@ jobs:
         run: npm run build
 
   # ---------------------------------------------------------------- Rust 侧
-  rust-tests:
+  rust_tests:
     name: rust-tests
     runs-on: windows-2022
     timeout-minutes: 35
@@ -123,10 +123,10 @@ jobs:
         run: cargo clippy -- -D warnings
 
   # ---------------------------------------------------------------- 打包与端到端
-  package-build:
+  package_build:
     name: package-build
     # @brief 先确认静态检查与单测通过，再花时间打包，避免把额度浪费在已知会失败的提交上。
-    needs: [governance, python-tests, frontend-tests]
+    needs: [governance, python_tests, frontend_tests]
     runs-on: windows-2022
     timeout-minutes: 45
     # @brief 只有本作业需要写权限：发布 tag 时上传安装包。
@@ -249,12 +249,14 @@ jobs:
             release-output/SHA256SUMS.txt
 
   # ---------------------------------------------------------------- 必需状态检查
-  # @brief 该作业名就是 ruleset 里要求的必需检查上下文 test-and-build，改名会直接让门禁失效。
+  # @brief 该作业的显示名就是 ruleset 里要求的必需检查上下文 test-and-build；改名会直接让门禁失效。
+  #        作业 id 用下划线是刻意的：GitHub 表达式里 needs.python-tests.result 会被解析成减法，
+  #        只有 needs.python_tests.result 这种标识符才能正确取值。
   #        拆分后它必须真实反映所有前置作业：失败时给出 failure 而不是 skipped，
   #        避免"没有运行"被误读为"通过"或"无关"。
-  test-and-build:
+  test_and_build:
     name: test-and-build
-    needs: [governance, python-tests, frontend-tests, rust-tests, package-build]
+    needs: [governance, python_tests, frontend_tests, rust_tests, package_build]
     if: always()
     runs-on: windows-2022
     timeout-minutes: 5
@@ -263,10 +265,10 @@ jobs:
         shell: pwsh
         env:
           RESULT_GOVERNANCE: ${{ needs.governance.result }}
-          RESULT_PYTHON: ${{ needs.python-tests.result }}
-          RESULT_FRONTEND: ${{ needs.frontend-tests.result }}
-          RESULT_RUST: ${{ needs.rust-tests.result }}
-          RESULT_PACKAGE: ${{ needs.package-build.result }}
+          RESULT_PYTHON: ${{ needs.python_tests.result }}
+          RESULT_FRONTEND: ${{ needs.frontend_tests.result }}
+          RESULT_RUST: ${{ needs.rust_tests.result }}
+          RESULT_PACKAGE: ${{ needs.package_build.result }}
         run: |
           $results = [ordered]@{
             governance    = $env:RESULT_GOVERNANCE
