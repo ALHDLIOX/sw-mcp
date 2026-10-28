@@ -1361,6 +1361,36 @@ fn detected_skill_root(app: &AppHandle, requested: Option<&str>) -> Result<PathB
         })
 }
 
+/// @brief 判断 `program` 是否为 Windows 批处理脚本（.cmd/.bat）。
+/// 这些文件只能由 cmd.exe 解释执行；CreateProcessW 对它们的隐式委托
+/// 在含非 ASCII 路径 + 非 GBK 代码页环境（如 GitHub 英文 runner）下不稳定。
+#[cfg(windows)]
+fn is_batch_script(program: &Path) -> bool {
+    program
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("cmd") || ext.eq_ignore_ascii_case("bat"))
+        .unwrap_or(false)
+}
+
+#[cfg(not(windows))]
+fn is_batch_script(_program: &Path) -> bool {
+    false
+}
+
+/// @brief 剥离 `fs::canonicalize` 产生的 `\\?\`（verbatim path）前缀，得到普通绝对路径。
+/// cmd.exe 不识别 verbatim 前缀；本函数仅用于传给 cmd.exe 的批处理路径。
+#[cfg(windows)]
+fn strip_verbatim_prefix(program: &Path) -> PathBuf {
+    let text = program.to_string_lossy();
+    PathBuf::from(text.strip_prefix(r"\\?\").unwrap_or(&text).to_string())
+}
+
+#[cfg(not(windows))]
+fn strip_verbatim_prefix(program: &Path) -> PathBuf {
+    program.to_path_buf()
+}
+
 fn command_summary_with_prefix(command: &(String, Vec<String>), args: &[&str]) -> Value {
     // CWE-78: 子进程仅接受白名单命令名，或无 ".." 穿越段的绝对路径可执行文件
     // （local_agent_command 各构造分支只产出这两类来源）。
@@ -1386,7 +1416,22 @@ fn command_summary_with_prefix(command: &(String, Vec<String>), args: &[&str]) -
             Err(error) => return json!({"ok":false,"message":error.to_string()}),
         }
     };
-    let mut process = Command::new(program);
+    // @brief Windows 上不要依赖 CreateProcessW 对 .cmd/.bat 的隐式批处理转换：
+    // 该未文档化行为会把程序转成 `cmd.exe /c`，在含中文路径 + 非 GBK 代码页
+    // （如 GitHub 英文 runner）下偶发报 "The system cannot find the path specified."。
+    // 改为显式 `cmd.exe /d /c` 并沿用 .arg 的标准引号转义（Rust 会给含空格的
+    // program 自动加引号，cmd.exe 剥离后得到真实路径），避免隐式委托的代码页歧义。
+    // 注意：canonicalize 返回 `\\?\` 前缀的 verbatim 路径，cmd.exe 不识别该前缀，
+    // 必须剥离后再传入。
+    // 安全边界：仅对扩展名为 .cmd/.bat 的程序启用；白名单/绝对路径/is_file/无 `..`
+    // 校验已在上面完成，args 均为可信固定值（--version / login status / auth 字面量）。
+    let mut process = if is_batch_script(&program) {
+        let mut cmd = Command::new("cmd.exe");
+        cmd.arg("/d").arg("/c").arg(strip_verbatim_prefix(&program));
+        cmd
+    } else {
+        Command::new(&program)
+    };
     process.args(&command.1).args(args);
     #[cfg(windows)]
     process.creation_flags(CREATE_NO_WINDOW);
