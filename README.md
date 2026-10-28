@@ -39,24 +39,63 @@ AI 负责理解意图、查证 API、规划步骤；Execution Core 保证执行�
 
 ---
 
+## Prerequisites
+
+| 项 | 要求 | 检查方法 |
+|---|---|---|
+| 操作系统 | Windows 10/11 x64 | 原生 `SLDPRT` / `SLDASM` / `SLDDRW` 依赖 SolidWorks COM，其他系统仅可用开放格式能力 |
+| Python | 3.10+（本机真机验收使用 3.12） | `python -V` |
+| Node.js | 20+（工作台、MCP 注册与 Skill 安装器） | `node -v` |
+| SolidWorks | 2024 或 2026，需合法许可 | `python scripts/cad_doctor.py` |
+| AutoCAD | 可选，仅 DWG/DXF 子技能需要 | — |
+
+安装 Python 依赖：
+
+```powershell
+python -m pip install -r requirements.txt
+# 只有开放格式（OCCT）能力才需要：
+python -m pip install -r requirements-occt.txt
+```
+
+只读环境自检（不会打开或关闭 CAD）：
+
+```powershell
+python scripts/cad_doctor.py           # 发现的安装路径、版本、COM 注册状态
+python scripts/sw_capability_probe.py  # 类型库与能力清单
+```
+
+模板与材料库**默认自动探测**，不需要写死路径。只有非标准安装位置才需要
+[`config/runtime.example.json`](config/runtime.example.json) 与 `SOLIDWORKS_TYPELIB_DIRS`，
+见 [`config/README.md`](config/README.md)。
+
+---
+
 ## Quick Start
 
 三种入口**任选其一**即可，不需要同时启动。
 
-### Option 1 — Skill（最简单）
+### Option 1 — Skill
 
-```bash
+```powershell
 npx github:wzyn20051216/solidworks-automation-skill
-# 或
-claude skill add https://github.com/wzyn20051216/solidworks-automation-skill
 ```
+
+该命令获取本仓库并执行根目录的 `install.js`（`package.json` 的 `bin` 入口），
+把 Skill 复制到本机**已存在**的 Agent skills 目录之一（`.agents` / `.claude` / `.codex` / `.cursor` / `.openclaw`）。
+安装位置由脚本探测，不写入固定路径。若 `npx` 在当前网络环境不可用，改用下方 Option 2 的克隆方式，
+再执行 `node install.js`。
 
 ### Option 2 — MCP
 
 ```powershell
-npm install -g @smithery/cli
-smithery mcp add wzyn20051216/solidworks-automation-skill --client codex --config '{}'
+git clone https://github.com/wzyn20051216/solidworks-automation-skill.git
+cd solidworks-automation-skill
+python -m pip install -r requirements.txt -r mcp-server/requirements.txt
+node mcp-server/register_all_ai_mcp.js --help          # 查看全部参数
+node mcp-server/register_all_ai_mcp.js --clients codex,claude-code,cursor
 ```
+
+注册脚本会写入对应客户端的 MCP 配置，并在写入前生成 `.bak` 备份；加 `--strict` 可让任一客户端失败时非零退出。
 
 ### Option 3 — CAD Studio 桌面版
 
@@ -133,11 +172,12 @@ Artifacts + Evidence
 
 ## Reliability
 
-V2 附带 **37 个 deterministic reliability scenarios**，覆盖正常执行、故障注入、后端回退、能力缺口与策略门禁。
+当前附带 **43 个 deterministic reliability scenarios**（12 nominal + 31 robustness），
+覆盖正常执行、故障注入、后端回退、能力缺口与策略门禁；由 `golden-workflows.yaml` 的 12 个 workflow 派生。
 
 | Metric | Current baseline |
 |---|---|
-| Nominal workflow | 10/10 first-pass（基线 v3，warning 等待人工复核） |
+| Nominal workflow | 12/12 first-pass（baseline v4，warning 归 guardrail，等待人工复核） |
 | Injected false-completion cases | all detected |
 | Escaped false completion | 0 in current deterministic benchmark |
 | Regression suite | 当前方案 B 验证记录见 [可靠性修复与验收](docs/architecture/scheme-b-reliability.md) |
@@ -145,7 +185,28 @@ V2 附带 **37 个 deterministic reliability scenarios**，覆盖正常执行、
 > 这是 **deterministic engineering benchmark**（Fake Handler/Reviewer + 故障注入），
 > 不是生产 SLA 或真实用户成功率。详见 [`docs/architecture/v2-evaluation.md`](docs/architecture/v2-evaluation.md)。
 
-原生 SolidWorks 操作当前以 **2026** 为支持与验收目标。方案 B 保留现有执行架构，修复失败状态、原生阵列、草图可编辑性和文档归属，并提供可选 HTTP 与可验证的产物取回；原有 60 个 MCP 工具的名称和输入 Schema 保持兼容。
+### 验证边界（Verification Boundary）
+
+本项目的验证分三层，**结论不能跨层套用**：
+
+| 层 | 在哪里跑 | 覆盖什么 | 不覆盖什么 |
+|---|---|---|---|
+| L1 离线回归 | 任意机器 | `pytest`（全量，当前 1045 项）、`evals/runner.py`（12 workflow / 43 scenario）、治理单测（当前 93 项） | 需要 SolidWorks / AutoCAD 进程的一切 |
+| L2 托管 CI | GitHub 托管 `windows-2022` | 与 L1 相同，外加前端/ Rust 构建与发布契约检查；作业名 `test-and-build`，是 `main` 的**唯一必需状态检查** | 真实 CAD 执行 |
+| L3 真实 CAD 验收 | **仅维护者本机**（Windows 11 + SolidWorks 2026 SP01.1） | Golden 五轮真机、装配/工程图/运动算例等真机回归 | 其它机器、其它版本 |
+
+必须明确的三点：
+
+1. **远端不存在 CAD 真机执行证据。** 仓库没有自托管 Runner，`Windows CAD Regression` 工作流为手动触发、
+   **不是必需检查**，当前无法执行。任何"远程 CAD CI 已通过"的表述都是错的。
+2. **本机通过 ≠ 跨机器通过。** 换一台机器请按 `Prerequisites` 与 `docs/CAD_STUDIO_USER_MANUAL.md` 重新自检，
+   不要直接引用维护者的验收结论。
+3. **L2 通过 ≠ 治理闭环。** 必需检查只保护 `main`；指向特性分支的 PR（含 stacked PR）不受该规则约束。
+
+原生 SolidWorks 操作当前以 **2026** 为支持与验收目标。方案 B 保留现有执行架构，修复失败状态、原生阵列、草图可编辑性和文档归属，并提供可选 HTTP 与可验证的产物取回。
+
+**MCP 工具数为 61**（实际清点：`mcp-server/server.py` 中 61 个 `@mcp.tool()`，名称去重后仍为 61）。
+其中原有 60 个的名称与输入 Schema 保持兼容，另新增 1 个只读产物工具 `cadstudio_read_artifact`。
 
 ---
 

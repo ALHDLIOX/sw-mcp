@@ -77,7 +77,8 @@ python mcp-server\server.py --transport streamable-http --host 0.0.0.0 --port 80
 - 大文件用 `cadstudio_read_artifact`，设置 `as_preview:false`、`offset`、`max_bytes`，按 `next_offset` 拼接 base64 块；完成后比对 SHA-256。
 - 读取适配复用既有 Artifact Ledger；文件改变、目录越界或任意路径参数均不能作为已验证产物读取。
 
-远端输入仍需预先放到 CAD 主机；产物读取接口只服务已有交付文件。现有 60 个工具的名称和输入 Schema 保持一致，新增 1 个只读产物工具。
+远端输入仍需预先放到 CAD 主机；产物读取接口只服务已有交付文件。
+工具**当前共 61 个**：原有 60 个的名称与输入 Schema 保持一致，另新增 1 个只读产物工具。
 
 ## Smithery 发布
 

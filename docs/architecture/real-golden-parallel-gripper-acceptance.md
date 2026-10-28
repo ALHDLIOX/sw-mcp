@@ -166,14 +166,17 @@ GetRemainingDOFs 注释，不改变执行或验收逻辑。交付 Commit 见堆�
 本机证据路径：
 
 ```text
-E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-real-five-01\summary.json
-E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-real-five-01\run-01..05\report.json
-E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-offline\pytest-full-final.log
-E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-offline\eval-final\eval_report.json
-E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-evidence-20261026.zip
-E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-evidence-sha256.json
-E:\desktop\sw-skills\p0-real-assembly-2026\output\p0-2-independent-seal-verification.json
+<worktree-p0-real-assembly-2026>/output/p0-2-real-five-01/summary.json
+<worktree-p0-real-assembly-2026>/output/p0-2-real-five-01/run-01..05/report.json
+<worktree-p0-real-assembly-2026>/output/p0-2-offline/pytest-full-final.log
+<worktree-p0-real-assembly-2026>/output/p0-2-offline/eval-final/eval_report.json
+<worktree-p0-real-assembly-2026>/output/p0-2-evidence-20261026.zip
+<worktree-p0-real-assembly-2026>/output/p0-2-evidence-sha256.json
+<worktree-p0-real-assembly-2026>/output/p0-2-independent-seal-verification.json
 ```
+
+> 该批证据产生于 P0-2 阶段的独立 worktree（`p0-real-assembly-2026`），路径随 worktree 所在磁盘位置变化，
+> 故以占位符表示。证据包未入库，只在维护者本机保留。
 
 ZIP 为 **11743432 字节 / 258 项**，包含正式五轮、开发 pilot、三个装配诊断、离线日志、SDK 签名、运行配置、
 诊断/归档复核脚本和证据索引。SHA-256：

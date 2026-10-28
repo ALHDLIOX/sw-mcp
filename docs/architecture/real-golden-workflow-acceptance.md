@@ -1,5 +1,9 @@
 # SolidWorks 2026 真实 Golden Workflow 验收
 
+> **历史口径注记（2026-10-27）**：本文是 P0-1 / P0-1.1 阶段的真机验收记录，其中
+> "37 个场景"的 deterministic eval 属**当时**口径；当前为 12 个 workflow / 43 个 scenario（baseline v4）。
+> 本文的真机结论（`mounting_bracket` 尺寸、孔位、材料、宽容差）不受该计数变化影响。
+
 本验收面向自动化维护者与 QA，验证 P0-1 / P0-1.1 `mounting_bracket`。规格从
 `golden-workflows.yaml` 的 `real_acceptance_2026` 读取：120 × 80 × 10 mm，
 4 × Ø7 贯穿孔，孔中心 X=±48、Y=±28 mm，原厂材料库 6061-T6。

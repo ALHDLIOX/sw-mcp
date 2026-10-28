@@ -1,8 +1,56 @@
 # P0-1.2 合并前检查报告
 
+> **PR 编号口径（2026-10-27）**：本文写于 P0-1.2 阶段，当时在途的是 **PR #39**。
+> 当前阶段为 P0-2.1，在途 PR 是 **#43**（Draft，base 为 P0-2 分支 `test/p0-real-assembly-gripper-2026`）。
+> 中间的 **#42** 是 P0-2 阶段。三者均为堆叠 Draft，均不合并 main。
+> 本文其他结论（BLOCKED、所需 GitHub 配置）对 #43 同样适用。
+
 **合并就绪性：BLOCKED。保留 Draft PR #39，当前不建议合并 main。**
 代码层已移除一次性测试分支限制，但 GitHub 实际权限和环境保护尚不具备完整安全条件。
 本阶段没有创建 Environment、Secret、Runner，也未修改仓库设置或推送 main。
+
+## 治理标准调整记录（2026-10-27）
+
+本文件正文保留 P0-1.2 当时的原始要求，**未删除或改写历史条目**。但其中"至少一人审批""需要另一位有资格的审批人"等要求，已按项目实际治理模式正式调整，阅读下方准入条件时须结合本节。
+
+| 项 | 原要求（P0-1.2 时点） | 调整后（单人维护模式） |
+| --- | --- | --- |
+| 分支规则 | ruleset 至少要求一人审批 + 必需状态检查 | ruleset 处于 active；**必须经 Pull Request** 进入 main；必需状态检查含 `test-and-build`；**`bypass_actors` 必须为空**（只读凭据读不到该字段，证据来自维护者离线签名证明）。审批数可为 0 |
+| 独立审查人 | Environment 需 Required reviewers + Prevent self-review，且必须由另一位有资格的人审批 | 不作为准入硬条件。缺失时记录为**剩余风险**，不得表述为"独立审批已通过" |
+| 治理定性 | 以双人复核为前提 | 单人核心维护 + 开放社区贡献；合并由 owner 决定，不声称具备双人复核能力 |
+
+**调整理由**：仓库仅有单一维护者，外部贡献以 Fork + PR 形式进行。强制要求独立审批人会产生两种失败结果——保留维护者 bypass 则规则形同虚设（假合规），移除 bypass 且无第二审查人则任何 PR 都无法合并（死锁）。两者都不能带来真实安全增益。
+
+**影响范围**：`scripts/ci/cad_ci_guard.cjs` 的准入检查已重构（`reviewed_ruleset` 拆为 `ruleset_active` + `pull_request_required` + `required_status_checks_present`；`independent_human_review` 由硬性检查改为 `governance.remaining_risks` 风险披露）。
+
+**2026-10-27 补充（Phase 2.1.2）**：`bypass` 相关检查改名为 **`no_bypass_actors`**，语义定为**列表必须为空**（而非"仅禁止 owner"），代码、测试、本文档与 `CONTRIBUTING.md` 表述一致。原因是单人维护仓库不存在合理的常驻绕过者，且"仅禁止 owner"会漏掉后续新增的带 bypass 的第二位协作者。同时：
+
+- 新增 `protected_ref_is_main`：`ref_protected` 只说明分支受保护，不保证它就是 `main`，故显式断言
+- `bypass_actors` 的证据改为**离线采集 + Ed25519 签名证明**，CI 只读验签与比对，不承担任何写权限；
+  该证明由维护者自签、信任根在仓库内，**不构成独立审计**，详见 [`governance-attestation.md`](governance-attestation.md)
+
+本文件第 3 条、第 5 条及「实际 GitHub 设置与人工配置条件」中的审批人描述均须按新标准阅读。
+
+**2026-10-27 补充（全量收口 V2 / B1）**：治理链再收紧一轮，准入检查由 24 项增至 **28 项**：
+
+- **信任锚点**：新增 `trust_root_anchor`，读取仓库变量 `GOVERNANCE_TRUST_ROOT_ANCHOR` 并与实际信任根比对。
+  它阻止"公钥 + 轮换日志 + 证明"被整体替换；缺失、格式非法或不匹配一律阻断。
+  局限：有仓库管理员权限者可连变量一起改，故仍**不是**独立可信根
+- **双摘要**：原单一 `config_digest` 拆为 `policy_digest`（规则内容，不含 bypass）与
+  `snapshot_digest`（含 bypass 与 `updated_at`）。**不得用前者未变声称完整配置未变**
+- **合规字段**：证明新增 `compliant` / `noncompliance_reasons` 并纳入签名载荷；采集工具在远端不合规时
+  **默认拒签**（不写文件、非零退出），校验侧严格要求 `compliant === true` 且与重算结果一致
+- **轮换日志**：退役密钥必须显式 `revoked_at`，缺失不视为已撤销；`KEYS` 与日志双向一致
+- **CODEOWNERS 降级**：新增 `.github/CODEOWNERS` 声明责任人，但 `require_code_owner_review` 维持 `false`。
+  **文件本身不构成强制门禁**，治理风险披露 `code_owner_review_not_enforced`
+- **漂移检测**：`check_governance_drift.cjs` 纳入 `test-and-build`，把治理代码/工作流/信任根/证明的改动
+  变成显式差异。它**不能阻止**有合并权者一并修改，故治理风险披露 `trusted_baseline_workflow_not_established`
+
+规格细节（字段、失效规则、轮换步骤）以 [`governance-attestation.md`](governance-attestation.md) 为唯一定义源。
+
+**剩余风险（未消除，须书面接受）**：① 无独立复核，合并质量依赖维护者单点判断；② Environment 无第二审批人，部署审批实际不可由他人把关；③ 维护者作为管理员仍可临时修改 ruleset，任何 GitHub 配置都无法消除该固有权力；④ 外部 PR 审查在 GitHub 侧可能无 review 留痕，需靠流程约定或 `required_review_thread_resolution` 补足。
+
+**未变**：远程 CAD CI 的 Environment / Runner / Secret 前提与执行证据要求不变；本调整**不解除** B-01。
 
 ## PR 相对 main 的完整审计
 
@@ -30,9 +78,9 @@
 
 1. 仓库名称和不可变 ID 匹配可信仓库；必须为受保护分支，不接受 tag。
 2. GitHub API 确认分支保护且分支 HEAD 与触发 SHA 相同，拒绝已移动的分支。
-3. 有效 ruleset 至少要求一人审批及必需状态检查。
+3. 有效 ruleset 至少要求一人审批及必需状态检查。（**2026-10-27 已调整**：单人维护模式下改为「ruleset active + 必须经 PR + 必需状态检查含 `test-and-build` + 维护者不在 bypass 列表」，审批数可为 0。见「治理标准调整记录」）
 4. 原触发者与重跑者均为该仓库 admin / maintain；普通 write/read 不足。
-5. `cad-validation` 已存在，有必需审批人、禁止自行审批，且仅允许受保护分支部署。
+5. `cad-validation` 已存在，有必需审批人、禁止自行审批，且仅允许受保护分支部署。（**2026-10-27 已调整**：Environment 存在与分支策略仍为硬条件；"必需审批人/禁止自行审批"在单人维护下不可达，改按风险披露，不再单独阻断。见「治理标准调整记录」）
 6. API 可见空闲、在线且标签匹配的 Windows CAD Runner。分页不完整也不假定通过。
 
 仅核验通过后，CAD 作业进入 `environment: cad-validation` 的服务器端人工审批。
@@ -56,8 +104,12 @@
 
 - main 及允许真机运行的分支使用 ruleset，至少一人审批、必需 CI，限制强推和删除；
   审核 bypass 列表，保护工作流、授权脚本和 CAD 测试来源。
+  （**2026-10-27 已调整**：审批人数要求取消，改为强制 PR + 必需 CI + **清空 bypass 列表**；限制强推和删除保持不变。见「治理标准调整记录」）
 - 创建 `cad-validation`：Required reviewers、Prevent self-review、仅受保护分支，
   并在界面关闭管理员绕过保护。需要另一位有资格的审批人，不能只有触发者自己。
+  （**2026-10-27 已调整**：单人维护模式下不存在第二位审批人。Environment 存在与"仅受保护分支"仍为硬条件；
+  Required reviewers / Prevent self-review 改按风险披露。该冲突使远程 CAD CI 在本模式下**仍不可达**，
+  B-01 保持 BLOCKED，需人工选定处置路径。见「治理标准调整记录」）
 - 配置 `CAD_CI_AUDIT_TOKEN`：只选本仓库，Administration:read、Actions:read、
   Metadata:read，无写权限，设置短有效期和轮换负责人。普通 GITHUB_TOKEN 没有
   Runner 清单所需 Administration:read，不能假设它足够，也不能因此跳过核验。
@@ -185,16 +237,22 @@ $env:PYTHONUTF8 = '1'
 python tests/solidworks_golden_workflow.py --case mounting_bracket --output output/p0-12-real-five-01 --runs 5 --expected-terminal blocked --runtime-config output/p0-12-runtime.json
 ```
 
+> 该命令为当时实际执行记录，`output/p0-12-runtime.json` 是未入库的本机配置。
+> 外部复现请改用 `config/runtime.example.json`（`null` 路径 = 自动探测），并更换尚不存在的输出目录。
+
 本次 JSON 配置显式指定本机已经安装的原厂材料库，模板自动发现；安装路径和库文件 hash
 记录在报告中，未写入代码默认值。此结果仅覆盖该 2026 安装和精确材料条目，不声称验证其它版本。
 
 证据目录：
 
 ```text
-E:\desktop\sw-skills\p0-real-golden-2026\output\p0-12-real-five-01
-E:\desktop\sw-skills\p0-real-golden-2026\output\p0-12-offline
-E:\desktop\sw-skills\p0-real-golden-2026\output\p0-12-evidence-20261023.zip
+<worktree-p0-real-golden-2026>/output/p0-12-real-five-01
+<worktree-p0-real-golden-2026>/output/p0-12-offline
+<worktree-p0-real-golden-2026>/output/p0-12-evidence-20261023.zip
 ```
+
+> 该批证据产生于 P0-1.2 阶段的独立 worktree（`p0-real-golden-2026`），路径随 worktree 所在磁盘位置变化，
+> 故以占位符表示。证据包未入库，只在维护者本机保留。
 
 证据包共 121 个文件（含总哈希清单）；SHA-256：
 

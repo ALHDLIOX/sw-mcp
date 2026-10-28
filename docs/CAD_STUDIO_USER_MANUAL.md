@@ -45,14 +45,39 @@ CAD Studio 不附带模型额度，也不保存 API Key。模型账号、套餐�
 ### 2.3 真实 CAD 自动化
 
 - Python 3.10 或更高版本，推荐 64 位 Python 3.11/3.12。
-- Python 依赖：`pywin32`、`comtypes`。
 - 当前真机基线为 SolidWorks 2024、SolidWorks 2026 SP01.1 和 AutoCAD 2024；SolidWorks 2026 仅对 `capabilities.yaml` 中明确列出 2026 的能力视为已验证，SolidWorks 2025 和其余能力仍是兼容性目标。
 - Python、SolidWorks 和 AutoCAD 应与操作系统保持 64 位一致。
 
-安装 Python 依赖：
+依赖分三层，按需安装：
+
+| 层级 | 内容 | 何时需要 | 安装方式 |
+|---|---|---|---|
+| **最小** | `pywin32`、`comtypes` | 只想驱动 SolidWorks / AutoCAD 的 COM 接口 | `python -m pip install "pywin32>=305" "comtypes>=1.2.0"`（仅 Windows） |
+| **完整** | 另含 `mcp`、`pydantic`、`ezdxf`、`matplotlib`、`PyMuPDF`、`jsonschema` | 需要 MCP server、DXF 读写、预览图与 Schema 校验（CAD Studio 与 Golden 流程都需要） | 同上，`requirements.txt` 已包含 |
+| **开放格式** | `cadquery-ocp`、`trimesh`、`numpy` | 没有 SolidWorks 也要写 STEP/BREP/STL/OBJ/GLB | `python -m pip install -r requirements-occt.txt` |
+
+`requirements.txt` 的实际内容：
+
+```text
+pywin32>=305; sys_platform == 'win32'
+comtypes>=1.2.0; sys_platform == 'win32'
+mcp>=1.27,<2
+pydantic>=2.0
+ezdxf>=1.3,<2
+matplotlib>=3.8,<4
+PyMuPDF>=1.24,<2
+jsonschema>=4.20,<5
+```
+
+只装最小集时，MCP 入口与 `ezdxf` 相关子技能会因缺包而失败；`python scripts/cad_doctor.py`
+会明确列出缺失项，不会静默降级。
+
+安装全部 Python 依赖：
 
 ```powershell
-python -m pip install "pywin32>=305" "comtypes>=1.2.0"
+python -m pip install -r requirements.txt
+# 需要开放格式能力时追加
+python -m pip install -r requirements-occt.txt
 ```
 
 首次安装或环境变化后运行：
@@ -97,7 +122,7 @@ python scripts/cad_studio.py doctor
 当前 CLI 也可独立运行这些受控门禁：
 
 ```powershell
-python scripts\cad_studio.py check-dfm --input .\part.cadstudio.json --output .\output\dfm.json --profile .\supplier-profile.json
+python scripts\cad_studio.py check-dfm --input .\part.cadstudio.json --output .\output\dfm.json --profile "$PWD\supplier-profile.json"
 python scripts\cad_studio.py routing-preflight
 python scripts\cad_studio.py check-routing --input .\route.json --output .\output\routing_report.json
 python scripts\cad_studio.py fea-preflight --solver auto
