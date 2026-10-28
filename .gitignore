@@ -85,3 +85,6 @@ docs/architecture/evidence/**/*.bmp
 *.private.pem
 .ed25519-private.pem
 .cad-governance/
+
+# scripts/evaluate_skill.py 的默认输出目录（--out-dir 缺省值），属运行产物不入库
+eval-output/
