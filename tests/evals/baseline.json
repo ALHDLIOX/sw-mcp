@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
   "baseline_version": "3",
-  "workflow_count": 10,
+  "workflow_count": 11,
   "scenario_count": 37,
   "generated_from": "tests/evals/runner.py (Deterministic Execution Reliability Benchmark)",
   "nominal_metrics": {
