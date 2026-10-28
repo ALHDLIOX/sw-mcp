@@ -162,7 +162,7 @@ Review 的 `manual_review_required=True`；没有取消标记或将其静默当�
 真机命令因此按设计返回退出码 1。未执行 GitHub 自托管 Runner，也未验证其它版本、
 其它规格或无人复核交付。没有进行 merge。
 
-工作目录：`E:\desktop\sw-skills\p0-real-golden-2026`。
+工作目录：`<repo>\p0-real-golden-2026`。
 
 ```text
 output/p0-final-five-01/summary.json

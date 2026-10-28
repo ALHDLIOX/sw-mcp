@@ -18,11 +18,17 @@
       "私钥",
       "本机绝对路径"
     ],
-    "findings": "3 个文件未命中任何敏感模式；suite-summary 命中 5 处本机绝对路径，已脱敏为 <repo> 占位符",
+    "findings": "suite-summary 命中 5 处本机绝对路径，已脱敏为 <repo> 占位符；p0-2-1-real-gripper-travel-2026-10-27.json 首次扫描漏判（JSON 转义反斜杠未命中正则），2026-10-28 复扫发现 83 处本机绝对路径与 3 处 Windows 用户名，已就地脱敏",
     "redacted_files": [
-      "suite-summary.redacted.json"
+      "suite-summary.redacted.json",
+      "p0-2-1-real-gripper-travel-2026-10-27.json"
     ],
-    "note": "脱敏副本已在 manifest 中单独记录 original_sha256 与 published_sha256，不得把脱敏文件冒充原始文件"
+    "redaction_mapping": {
+      "E:\\desktop\\sw-skills\\<worktree>\\": "<repo>\\",
+      "C:\\Users\\<name>\\": "<user>\\",
+      "E:\\SolidWroks2026\\SOLIDWORKS\\": "<solidworks>\\"
+    },
+    "note": "脱敏副本已在 manifest 中单独记录 original_sha256 与 published_sha256，不得把脱敏文件冒充原始文件。p0-2-1-real-gripper-travel-2026-10-27.json 为就地脱敏（无独立副本），其清单 sha256 已同步重算。"
   },
   "external_reproducibility": {
     "archive_in_repo": false,
@@ -45,9 +51,9 @@
       "published": "p0-2-1-evidence-sha256.json",
       "source": "output/p0-2-1-evidence-sha256.json",
       "redacted": false,
-      "published_sha256": "3b143b864256741aaa0ed58871fc0946c981e4a8996bc3fd19acb00a9c0894ae",
+      "published_sha256": "3fc3977db6d6d593a0acfd998b994ee6967296973bee75f5856a601f06c8ac88",
       "published_bytes": 106380,
-      "original_sha256": "3b143b864256741aaa0ed58871fc0946c981e4a8996bc3fd19acb00a9c0894ae"
+      "original_sha256": "3fc3977db6d6d593a0acfd998b994ee6967296973bee75f5856a601f06c8ac88"
     },
     {
       "published": "p0-2-1-independent-seal-verification.json",

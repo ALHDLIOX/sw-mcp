@@ -472,11 +472,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\base.SLDPRT"
               },
               {
                 "name": "slider-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\slider.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\slider.SLDPRT"
               }
             ]
           },
@@ -487,11 +487,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\base.SLDPRT"
               },
               {
                 "name": "finger_rivet-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\finger_rivet.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\finger_rivet.SLDPRT"
               }
             ]
           },
@@ -502,11 +502,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\base.SLDPRT"
               },
               {
                 "name": "finger_rivet-2",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\finger_rivet.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\finger_rivet.SLDPRT"
               }
             ]
           }
@@ -539,11 +539,11 @@
                 "components": [
                   {
                     "name": "support-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\support.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\support.SLDPRT"
                   },
                   {
                     "name": "slider-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -576,11 +576,11 @@
                 "components": [
                   {
                     "name": "base-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\base.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\base.SLDPRT"
                   },
                   {
                     "name": "slider-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -613,11 +613,11 @@
                 "components": [
                   {
                     "name": "base-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\base.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\base.SLDPRT"
                   },
                   {
                     "name": "slider-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -650,11 +650,11 @@
                 "components": [
                   {
                     "name": "support-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\support.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\support.SLDPRT"
                   },
                   {
                     "name": "slider-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-01\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-01\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -698,16 +698,16 @@
       },
       "resolved_templates": {
         "part": {
-          "path": "C:\\ProgramData\\SOLIDWORKS\\SOLIDWORKS 2026\\templates\\gb_part.prtdot",
+          "path": "<solidworks>\\SOLIDWORKS 2026\\templates\\gb_part.prtdot",
           "sha256": "8cfb85c297adeec4ac01861a51fccb20a68a415997659f08a99c1d5e26292bff"
         },
         "assembly": {
-          "path": "C:\\ProgramData\\SOLIDWORKS\\SOLIDWORKS 2026\\templates\\gb_assembly.asmdot",
+          "path": "<solidworks>\\SOLIDWORKS 2026\\templates\\gb_assembly.asmdot",
           "sha256": "2c3c276538bb07fa4b50b2523c435a4a3639d4a6a6b2aaa5cc93ba1a40445166"
         }
       },
       "resolved_material_database": {
-        "path": "E:\\SolidWroks2026\\SOLIDWORKS\\lang\\english\\sldmaterials\\solidworks materials.sldmat",
+        "path": "<solidworks>\\lang\\english\\sldmaterials\\solidworks materials.sldmat",
         "sha256": "636ef75ffb10e8abf7529c910a50dc2cb0d73ce5112c9721e7e4de1824cf57c5"
       },
       "report_path": "output\\p0-2-1-real-five-05\\run-01\\report.json",
@@ -1168,11 +1168,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\base.SLDPRT"
               },
               {
                 "name": "slider-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\slider.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\slider.SLDPRT"
               }
             ]
           },
@@ -1183,11 +1183,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\base.SLDPRT"
               },
               {
                 "name": "finger_rivet-2",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\finger_rivet.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\finger_rivet.SLDPRT"
               }
             ]
           },
@@ -1198,11 +1198,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\base.SLDPRT"
               },
               {
                 "name": "finger_rivet-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\finger_rivet.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\finger_rivet.SLDPRT"
               }
             ]
           }
@@ -1235,11 +1235,11 @@
                 "components": [
                   {
                     "name": "support-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\support.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\support.SLDPRT"
                   },
                   {
                     "name": "slider-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -1272,11 +1272,11 @@
                 "components": [
                   {
                     "name": "base-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\base.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\base.SLDPRT"
                   },
                   {
                     "name": "slider-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -1309,11 +1309,11 @@
                 "components": [
                   {
                     "name": "base-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\base.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\base.SLDPRT"
                   },
                   {
                     "name": "slider-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -1346,11 +1346,11 @@
                 "components": [
                   {
                     "name": "support-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\support.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\support.SLDPRT"
                   },
                   {
                     "name": "slider-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-02\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-02\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -1394,16 +1394,16 @@
       },
       "resolved_templates": {
         "part": {
-          "path": "C:\\ProgramData\\SOLIDWORKS\\SOLIDWORKS 2026\\templates\\gb_part.prtdot",
+          "path": "<solidworks>\\SOLIDWORKS 2026\\templates\\gb_part.prtdot",
           "sha256": "8cfb85c297adeec4ac01861a51fccb20a68a415997659f08a99c1d5e26292bff"
         },
         "assembly": {
-          "path": "C:\\ProgramData\\SOLIDWORKS\\SOLIDWORKS 2026\\templates\\gb_assembly.asmdot",
+          "path": "<solidworks>\\SOLIDWORKS 2026\\templates\\gb_assembly.asmdot",
           "sha256": "2c3c276538bb07fa4b50b2523c435a4a3639d4a6a6b2aaa5cc93ba1a40445166"
         }
       },
       "resolved_material_database": {
-        "path": "E:\\SolidWroks2026\\SOLIDWORKS\\lang\\english\\sldmaterials\\solidworks materials.sldmat",
+        "path": "<solidworks>\\lang\\english\\sldmaterials\\solidworks materials.sldmat",
         "sha256": "636ef75ffb10e8abf7529c910a50dc2cb0d73ce5112c9721e7e4de1824cf57c5"
       },
       "report_path": "output\\p0-2-1-real-five-05\\run-02\\report.json",
@@ -1864,11 +1864,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\base.SLDPRT"
               },
               {
                 "name": "slider-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\slider.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\slider.SLDPRT"
               }
             ]
           },
@@ -1879,11 +1879,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\base.SLDPRT"
               },
               {
                 "name": "finger_rivet-2",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\finger_rivet.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\finger_rivet.SLDPRT"
               }
             ]
           },
@@ -1894,11 +1894,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\base.SLDPRT"
               },
               {
                 "name": "finger_rivet-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\finger_rivet.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\finger_rivet.SLDPRT"
               }
             ]
           }
@@ -1931,11 +1931,11 @@
                 "components": [
                   {
                     "name": "support-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\support.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\support.SLDPRT"
                   },
                   {
                     "name": "slider-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -1968,11 +1968,11 @@
                 "components": [
                   {
                     "name": "base-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\base.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\base.SLDPRT"
                   },
                   {
                     "name": "slider-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -2005,11 +2005,11 @@
                 "components": [
                   {
                     "name": "base-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\base.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\base.SLDPRT"
                   },
                   {
                     "name": "slider-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -2042,11 +2042,11 @@
                 "components": [
                   {
                     "name": "support-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\support.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\support.SLDPRT"
                   },
                   {
                     "name": "slider-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-03\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-03\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -2090,16 +2090,16 @@
       },
       "resolved_templates": {
         "part": {
-          "path": "C:\\ProgramData\\SOLIDWORKS\\SOLIDWORKS 2026\\templates\\gb_part.prtdot",
+          "path": "<solidworks>\\SOLIDWORKS 2026\\templates\\gb_part.prtdot",
           "sha256": "8cfb85c297adeec4ac01861a51fccb20a68a415997659f08a99c1d5e26292bff"
         },
         "assembly": {
-          "path": "C:\\ProgramData\\SOLIDWORKS\\SOLIDWORKS 2026\\templates\\gb_assembly.asmdot",
+          "path": "<solidworks>\\SOLIDWORKS 2026\\templates\\gb_assembly.asmdot",
           "sha256": "2c3c276538bb07fa4b50b2523c435a4a3639d4a6a6b2aaa5cc93ba1a40445166"
         }
       },
       "resolved_material_database": {
-        "path": "E:\\SolidWroks2026\\SOLIDWORKS\\lang\\english\\sldmaterials\\solidworks materials.sldmat",
+        "path": "<solidworks>\\lang\\english\\sldmaterials\\solidworks materials.sldmat",
         "sha256": "636ef75ffb10e8abf7529c910a50dc2cb0d73ce5112c9721e7e4de1824cf57c5"
       },
       "report_path": "output\\p0-2-1-real-five-05\\run-03\\report.json",
@@ -2560,11 +2560,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\base.SLDPRT"
               },
               {
                 "name": "slider-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\slider.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\slider.SLDPRT"
               }
             ]
           },
@@ -2575,11 +2575,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\base.SLDPRT"
               },
               {
                 "name": "finger_rivet-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\finger_rivet.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\finger_rivet.SLDPRT"
               }
             ]
           },
@@ -2590,11 +2590,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\base.SLDPRT"
               },
               {
                 "name": "finger_rivet-2",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\finger_rivet.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\finger_rivet.SLDPRT"
               }
             ]
           }
@@ -2627,11 +2627,11 @@
                 "components": [
                   {
                     "name": "support-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\support.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\support.SLDPRT"
                   },
                   {
                     "name": "slider-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -2664,11 +2664,11 @@
                 "components": [
                   {
                     "name": "base-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\base.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\base.SLDPRT"
                   },
                   {
                     "name": "slider-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -2701,11 +2701,11 @@
                 "components": [
                   {
                     "name": "base-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\base.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\base.SLDPRT"
                   },
                   {
                     "name": "slider-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -2738,11 +2738,11 @@
                 "components": [
                   {
                     "name": "support-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\support.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\support.SLDPRT"
                   },
                   {
                     "name": "slider-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-04\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-04\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -2786,16 +2786,16 @@
       },
       "resolved_templates": {
         "part": {
-          "path": "C:\\ProgramData\\SOLIDWORKS\\SOLIDWORKS 2026\\templates\\gb_part.prtdot",
+          "path": "<solidworks>\\SOLIDWORKS 2026\\templates\\gb_part.prtdot",
           "sha256": "8cfb85c297adeec4ac01861a51fccb20a68a415997659f08a99c1d5e26292bff"
         },
         "assembly": {
-          "path": "C:\\ProgramData\\SOLIDWORKS\\SOLIDWORKS 2026\\templates\\gb_assembly.asmdot",
+          "path": "<solidworks>\\SOLIDWORKS 2026\\templates\\gb_assembly.asmdot",
           "sha256": "2c3c276538bb07fa4b50b2523c435a4a3639d4a6a6b2aaa5cc93ba1a40445166"
         }
       },
       "resolved_material_database": {
-        "path": "E:\\SolidWroks2026\\SOLIDWORKS\\lang\\english\\sldmaterials\\solidworks materials.sldmat",
+        "path": "<solidworks>\\lang\\english\\sldmaterials\\solidworks materials.sldmat",
         "sha256": "636ef75ffb10e8abf7529c910a50dc2cb0d73ce5112c9721e7e4de1824cf57c5"
       },
       "report_path": "output\\p0-2-1-real-five-05\\run-04\\report.json",
@@ -3256,11 +3256,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\base.SLDPRT"
               },
               {
                 "name": "slider-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\slider.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\slider.SLDPRT"
               }
             ]
           },
@@ -3271,11 +3271,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\base.SLDPRT"
               },
               {
                 "name": "finger_rivet-2",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\finger_rivet.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\finger_rivet.SLDPRT"
               }
             ]
           },
@@ -3286,11 +3286,11 @@
             "components": [
               {
                 "name": "base-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\base.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\base.SLDPRT"
               },
               {
                 "name": "finger_rivet-1",
-                "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\finger_rivet.SLDPRT"
+                "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\finger_rivet.SLDPRT"
               }
             ]
           }
@@ -3323,11 +3323,11 @@
                 "components": [
                   {
                     "name": "support-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\support.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\support.SLDPRT"
                   },
                   {
                     "name": "slider-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -3360,11 +3360,11 @@
                 "components": [
                   {
                     "name": "base-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\base.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\base.SLDPRT"
                   },
                   {
                     "name": "slider-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -3397,11 +3397,11 @@
                 "components": [
                   {
                     "name": "base-1",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\base.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\base.SLDPRT"
                   },
                   {
                     "name": "slider-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -3434,11 +3434,11 @@
                 "components": [
                   {
                     "name": "support-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\support.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\support.SLDPRT"
                   },
                   {
                     "name": "slider-2",
-                    "path": "E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\output\\p0-2-1-real-five-05\\run-05\\parts\\slider.SLDPRT"
+                    "path": "<repo>\\output\\p0-2-1-real-five-05\\run-05\\parts\\slider.SLDPRT"
                   }
                 ]
               }
@@ -3482,16 +3482,16 @@
       },
       "resolved_templates": {
         "part": {
-          "path": "C:\\ProgramData\\SOLIDWORKS\\SOLIDWORKS 2026\\templates\\gb_part.prtdot",
+          "path": "<solidworks>\\SOLIDWORKS 2026\\templates\\gb_part.prtdot",
           "sha256": "8cfb85c297adeec4ac01861a51fccb20a68a415997659f08a99c1d5e26292bff"
         },
         "assembly": {
-          "path": "C:\\ProgramData\\SOLIDWORKS\\SOLIDWORKS 2026\\templates\\gb_assembly.asmdot",
+          "path": "<solidworks>\\SOLIDWORKS 2026\\templates\\gb_assembly.asmdot",
           "sha256": "2c3c276538bb07fa4b50b2523c435a4a3639d4a6a6b2aaa5cc93ba1a40445166"
         }
       },
       "resolved_material_database": {
-        "path": "E:\\SolidWroks2026\\SOLIDWORKS\\lang\\english\\sldmaterials\\solidworks materials.sldmat",
+        "path": "<solidworks>\\lang\\english\\sldmaterials\\solidworks materials.sldmat",
         "sha256": "636ef75ffb10e8abf7529c910a50dc2cb0d73ce5112c9721e7e4de1824cf57c5"
       },
       "report_path": "output\\p0-2-1-real-five-05\\run-05\\report.json",
@@ -3513,7 +3513,7 @@
         "exit_requested": true,
         "processes_after": {}
       },
-      "error": "Traceback (most recent call last):\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\tests\\golden_workflow_harness.py\", line 172, in run_once\n    case.run_cad(output,report)\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\tests\\solidworks_golden_gripper_travel_2026.py\", line 518, in run_cad\n    create_parts(session,output,report,s)\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\tests\\solidworks_golden_gripper_travel_2026.py\", line 365, in create_parts\n    if snap['validation']['status']!='pass': raise RuntimeError('零件几何失败: '+name+' '+str(snap['validation']))\n                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: 零件几何失败: rod {'status': 'fail', 'checks': {'single_native_solid': True, 'geometry': True, 'dimensions': True, 'editable_depth': True, 'material': False, 'mass_readable': False, 'sketches': True, 'features': True, 'health': True}}\n",
+      "error": "Traceback (most recent call last):\n  File \"<repo>\\tests\\golden_workflow_harness.py\", line 172, in run_once\n    case.run_cad(output,report)\n  File \"<repo>\\tests\\solidworks_golden_gripper_travel_2026.py\", line 518, in run_cad\n    create_parts(session,output,report,s)\n  File \"<repo>\\tests\\solidworks_golden_gripper_travel_2026.py\", line 365, in create_parts\n    if snap['validation']['status']!='pass': raise RuntimeError('零件几何失败: '+name+' '+str(snap['validation']))\n                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: 零件几何失败: rod {'status': 'fail', 'checks': {'single_native_solid': True, 'geometry': True, 'dimensions': True, 'editable_depth': True, 'material': False, 'mass_readable': False, 'sketches': True, 'features': True, 'health': True}}\n",
       "failed_checks": [
         "execution_error_free",
         "case_evidence_readable",
@@ -3624,11 +3624,11 @@
         "status": "failed",
         "owned_pid": 59820,
         "errors": [
-          "Traceback (most recent call last):\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\tests\\solidworks_golden_gripper_travel_2026.py\", line 576, in run_cad\n    model,components=create_assembly(session,output,s,report['resolved_templates']['assembly']['path'])\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\tests\\solidworks_golden_gripper_travel_2026.py\", line 433, in create_assembly\n    before={member(f,'Name') for f,_ in iter_feature_tree(model)}\n            ^^^^^^^^^^^^^^^^\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\scripts\\sw_connect.py\", line 140, in get_com_member\n    member = getattr(obj, attr_name)\n             ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\23201\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 620, in __getattr__\n    ret = self._oleobj_.Invoke(retEntry.dispid, 0, invoke_type, 1)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\npywintypes.com_error: (-2147417848, '被调用的对象已与其客户端断开连接。', None, None)\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\tests\\solidworks_golden_gripper_travel_2026.py\", line 595, in run_cad\n    previous.close_test_documents(session,output); cleanup['remaining_documents']=len(list(member(session.sw,'GetDocuments') or []))\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\tests\\solidworks_golden_parallel_gripper_2026.py\", line 569, in close_test_documents\n    for doc in list(member(session.sw,'GetDocuments') or []):\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\scripts\\sw_connect.py\", line 140, in get_com_member\n    member = getattr(obj, attr_name)\n             ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\23201\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 631, in __getattr__\n    raise AttributeError(f\"{self._username_}.{attr}\")\nAttributeError: SldWorks.Application.34.GetDocuments\n"
+          "Traceback (most recent call last):\n  File \"<repo>\\tests\\solidworks_golden_gripper_travel_2026.py\", line 576, in run_cad\n    model,components=create_assembly(session,output,s,report['resolved_templates']['assembly']['path'])\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<repo>\\tests\\solidworks_golden_gripper_travel_2026.py\", line 433, in create_assembly\n    before={member(f,'Name') for f,_ in iter_feature_tree(model)}\n            ^^^^^^^^^^^^^^^^\n  File \"<repo>\\scripts\\sw_connect.py\", line 140, in get_com_member\n    member = getattr(obj, attr_name)\n             ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<user>\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 620, in __getattr__\n    ret = self._oleobj_.Invoke(retEntry.dispid, 0, invoke_type, 1)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\npywintypes.com_error: (-2147417848, '被调用的对象已与其客户端断开连接。', None, None)\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"<repo>\\tests\\solidworks_golden_gripper_travel_2026.py\", line 595, in run_cad\n    previous.close_test_documents(session,output); cleanup['remaining_documents']=len(list(member(session.sw,'GetDocuments') or []))\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<repo>\\tests\\solidworks_golden_parallel_gripper_2026.py\", line 569, in close_test_documents\n    for doc in list(member(session.sw,'GetDocuments') or []):\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<repo>\\scripts\\sw_connect.py\", line 140, in get_com_member\n    member = getattr(obj, attr_name)\n             ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<user>\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 631, in __getattr__\n    raise AttributeError(f\"{self._username_}.{attr}\")\nAttributeError: SldWorks.Application.34.GetDocuments\n"
         ],
         "processes_after": {}
       },
-      "error": "Traceback (most recent call last):\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\tests\\golden_workflow_harness.py\", line 172, in run_once\n    case.run_cad(output,report)\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\tests\\solidworks_golden_gripper_travel_2026.py\", line 576, in run_cad\n    model,components=create_assembly(session,output,s,report['resolved_templates']['assembly']['path'])\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\tests\\solidworks_golden_gripper_travel_2026.py\", line 433, in create_assembly\n    before={member(f,'Name') for f,_ in iter_feature_tree(model)}\n            ^^^^^^^^^^^^^^^^\n  File \"E:\\desktop\\sw-skills\\p0-real-gripper-travel-2026\\scripts\\sw_connect.py\", line 140, in get_com_member\n    member = getattr(obj, attr_name)\n             ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\23201\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 620, in __getattr__\n    ret = self._oleobj_.Invoke(retEntry.dispid, 0, invoke_type, 1)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\npywintypes.com_error: (-2147417848, '被调用的对象已与其客户端断开连接。', None, None)\n",
+      "error": "Traceback (most recent call last):\n  File \"<repo>\\tests\\golden_workflow_harness.py\", line 172, in run_once\n    case.run_cad(output,report)\n  File \"<repo>\\tests\\solidworks_golden_gripper_travel_2026.py\", line 576, in run_cad\n    model,components=create_assembly(session,output,s,report['resolved_templates']['assembly']['path'])\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<repo>\\tests\\solidworks_golden_gripper_travel_2026.py\", line 433, in create_assembly\n    before={member(f,'Name') for f,_ in iter_feature_tree(model)}\n            ^^^^^^^^^^^^^^^^\n  File \"<repo>\\scripts\\sw_connect.py\", line 140, in get_com_member\n    member = getattr(obj, attr_name)\n             ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<user>\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 620, in __getattr__\n    ret = self._oleobj_.Invoke(retEntry.dispid, 0, invoke_type, 1)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\npywintypes.com_error: (-2147417848, '被调用的对象已与其客户端断开连接。', None, None)\n",
       "failed_checks": [
         "execution_error_free",
         "safe_cleanup",
