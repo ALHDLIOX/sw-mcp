@@ -46,6 +46,7 @@ AI 负责理解意图、查证 API、规划步骤；Execution Core 保证执行�
 | 操作系统 | Windows 10/11 x64 | 原生 `SLDPRT` / `SLDASM` / `SLDDRW` 依赖 SolidWorks COM，其他系统仅可用开放格式能力 |
 | Python | 3.10+（本机真机验收使用 3.12） | `python -V` |
 | Node.js | 20+（工作台、MCP 注册与 Skill 安装器） | `node -v` |
+| Git | 任意较新版本（安装器通过 `git clone` / `git pull` 获取与更新仓库） | `git --version` |
 | SolidWorks | 2024 或 2026，需合法许可 | `python scripts/cad_doctor.py` |
 | AutoCAD | 可选，仅 DWG/DXF 子技能需要 | — |
 
@@ -77,13 +78,32 @@ python scripts/sw_capability_probe.py  # 类型库与能力清单
 ### Option 1 — Skill
 
 ```powershell
-npx github:wzyn20051216/solidworks-automation-skill
+npx github:wzyn20051216/solidworks-automation-skill --target claude
 ```
 
-该命令获取本仓库并执行根目录的 `install.js`（`package.json` 的 `bin` 入口），
-把 Skill 复制到本机**已存在**的 Agent skills 目录之一（`.agents` / `.claude` / `.codex` / `.cursor` / `.openclaw`）。
-安装位置由脚本探测，不写入固定路径。若 `npx` 在当前网络环境不可用，改用下方 Option 2 的克隆方式，
-再执行 `node install.js`。
+该命令获取本仓库并执行根目录的 `install.js`（`package.json` 的 `bin` 入口）。
+
+**默认行为（安全优先，2026-10-28 起）**：
+
+- 只装到**已经存在** skills 目录的客户端（`.agents` / `.claude` / `.codex` / `.cursor` / `.openclaw`）；
+  一个都没检测到时**不会替你创建目录**，而是提示改用 `--target` 显式指定。
+- 目标目录已存在但**不是本仓库的 git 检出**（手动放置、解压、或其他来源）时，
+  **拒绝安装且不删除任何文件**。
+- 由本仓库安装的目录用 `git pull --ff-only` 更新；无法快进时**只报告，不删除**。
+- Python 依赖默认**不自动安装**，只打印命令；加 `--install-deps` 才执行。
+- 非 Windows 平台默认拒绝（SolidWorks COM 不可用）；确需使用开放格式能力加 `--allow-non-windows`。
+
+| 参数 | 作用 |
+|---|---|
+| `--target claude,codex` | 装到指定客户端；`all` 表示全部支持项 |
+| `--dry-run` | 只打印将要执行的动作，不写盘 |
+| `--install-deps` | 安装 `requirements.txt` + `mcp-server/requirements.txt` |
+| `--no-register-mcp` | 跳过 MCP 配置注册（默认注册，覆盖前自动备份 `.bak-<时间戳>`） |
+| `--force-reinstall` | 旧目录先改名为 `.bak-<时间戳>` 再重装（**不删除**） |
+
+安装使用 `git clone --depth 1`，只取工作树、不拉完整历史。仓库完整工作树约 13 MB，
+其中 `apps/`（桌面端源码，约 6 MB）与 Skill 运行无关。
+若 `npx` 在当前网络环境不可用，改用下方 Option 2 的克隆方式，再执行 `node install.js`。
 
 ### Option 2 — MCP
 
