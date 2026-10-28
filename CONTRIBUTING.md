@@ -147,15 +147,29 @@ GH_TOKEN="$(gh auth token)" node scripts/ci/capture_governance_attestation.cjs -
 ### 4. CI 检查
 
 - PR 必须通过 `test-and-build` 状态检查（ruleset `protect-main` 的实际必需检查名）
-- 该检查当前包含：`pytest` 全量、skill/MCP/release 校验、工作台前后端测试与构建，
-  以及**治理门禁自检**——`node --test tests/test_cad_ci_guard.cjs`（当前 93 项）与
-  `node scripts/ci/check_governance_drift.cjs`（10 个敏感文件的漂移检测）
+- 该检查自 2026-10-28 起是**聚合门禁**：它 `needs` 五个并行作业，任一失败即失败，
+  且失败时给出 `failure` 而不是 `skipped`（避免"没跑"被误读为"通过"）：
+
+  | 作业 | 覆盖内容 |
+  | --- | --- |
+  | `governance-gate` | `node --test tests/test_cad_ci_guard.cjs`（当前 93 项）与 `check_governance_drift.cjs`（10 个敏感文件的漂移检测） |
+  | `python-tests` | `pytest` 全量、skill / MCP / release 契约校验 |
+  | `frontend-tests` | 工作台依赖安装、启动诊断、前端测试与构建 |
+  | `rust-tests` | `cargo fmt -- --check`、`cargo test`、`cargo clippy -- -D warnings` |
+  | `package-build` | 打包、updater 契约校验、便携版与安装包端到端 |
+
+- 上述结构由 `tests/test_release_workflow_contract.py` 锁定：删掉 `merge_group` 触发器、
+  改必需检查名、`needs` 漏作业、缺 `timeout-minutes`、丢弃首次 E2E 诊断等都会让该测试失败，
+  而不是静默失效
+- 必需检查要求**分支与 main 同步**（`strict_required_status_checks_policy = true`）：
+  main 前进后必须更新分支并重跑，否则不能合并。目的是确保"合并后的树"就是 CI 验证过的那棵树
 - **改动 `scripts/ci/`、`.github/workflows/`、`tests/test_cad_ci_guard.cjs`、
   `docs/architecture/evidence/` 或信任根时**，必须运行 `check_governance_drift.cjs --update`
   并一并提交 `.github/governance-sensitive-manifest.json`，否则该检查会阻断
 - **本地通过不能替代 CI 通过**。两者结论不一致时，以 CI 为准并排查差异
-- 注意：owner 当前仍在 ruleset `bypass_actors` 中（`bypass_mode = always`），这是已记录的治理缺口。
-  **这不代表 CI 检查可被忽视**，也不构成"已强制门禁"的对外表述依据
+- 端到端步骤允许**重试 1 次**以吸收 WebView2/CDP 启动竞态：第 1 次诊断会存为
+  `release-output/e2e-diagnostics.attempt1.*` 并随构件上传（上传步骤为 `if: always()`）；
+  重试后仍失败即判失败——**不允许用重试掩盖稳定缺陷**
 - **真实 CAD 真机测试不是合并前置条件**：仓库没有自托管 Runner，`Windows CAD Regression` 为手动触发、
   非必需检查，无法被调度。合并判断只看托管 CI（`test-and-build`），真机证据由维护者在本机验收后写入 PR 描述
 
@@ -177,14 +191,25 @@ GH_TOKEN="$(gh auth token)" node scripts/ci/capture_governance_attestation.cjs -
 - **禁止**用 `bypass_actors`、管理员强制推送、关闭规则集、或把失败检查标记为 skipped 来让 PR 通过。
   唯一允许的例外是"检查因基础设施故障（如 Actions 配额耗尽）未能运行"，此时必须记录故障证据并说明未验证。
 
-**stacked PR 的已知缺口**：
+**合并队列（merge queue）当前不可用——如实记录**：
 
-- `protect-main` 只作用于 `refs/heads/main`。本仓库当前存在一条栈：
-  `main ← #39 ← #42 ← #43`，其中 #42、#43 的目标分支是另一条特性分支，
-  **不受必需检查约束**。
-- 因此 owner 必须在每一层合并后，对下一层重新触发并确认 `test-and-build` 通过；
-  不能因为"底层 PR 过了"就推定上层已受门禁保护。
-- 若要把中间层也纳入门禁，只能靠人工纪律或新增指向这些分支的 ruleset；当前未实现，不要宣称已覆盖。
+- 本仓库属**个人账号（`User`）**所有，GitHub 的 `merge_queue` 规则仅对组织（`Organization`）仓库开放。
+  2026-10-28 实测：向 `protect-main` 增加该规则返回 `422 Invalid rule 'merge_queue'`；
+  另用一个仅含该规则的**独立探针 ruleset** 提交，同样被拒，确认是能力缺失而非参数错误。
+- 工作流已声明 `merge_group` 触发器，将来仓库迁入组织后可**直接启用**队列，无需再改工作流。
+- **等效替代**：`strict_required_status_checks_policy = true`。`pull_request` 运行检查的是
+  `refs/pull/N/merge`（main 与 PR 的合并结果），配合"必须与 main 同步"这一条，
+  即可保证**合并后的树正是 CI 验证过的那棵树**。代价是 main 前进后要更新分支并重跑一次。
+- **不要**把"子作业全绿"说成"已通过 merge queue"——当前没有队列，这只是强同步 + 真实 PR 检查。
+
+**stacked PR 的已知缺口（历史记录与后续纪律）**：
+
+- 2026-10-28 之前存在一条栈 `main ← #39 ← #42 ← #43`，中间层的目标分支是另一条特性分支，
+  **不受必需检查约束**。该栈已于 2026-10-28 按序合并（`4e4df52` → `d9878f6` → `3237eca`）。
+- 期间出现过**两次中间态 main 红灯**（`4e4df52`、`d9878f6` 的 push 运行），
+  根因是便携版 E2E 的 page 竞态，已由 `6b9bee0` 修复；失败运行与日志全部保留可查。
+- 今后若再开栈，必须逐层合并后对下一层**重新触发并确认** `test-and-build` 通过；
+  "底层 PR 过了"不能推定为"上层已受门禁保护"，这条事实不得隐去。
 
 ### 5. 代码审查维度
 
