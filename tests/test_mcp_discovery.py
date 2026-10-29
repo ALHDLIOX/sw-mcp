@@ -405,7 +405,11 @@ def test_stdio_hidden_tools_are_still_checked_when_called_by_name(tmp_path):
 
         read = await session.call_tool("solidworks_health_check", {})
         assert read.isError is not True
-        assert json.loads(read.content[0].text)["status"] == "ok"
+        health = json.loads(read.content[0].text)
+        # CI 没有安装 SolidWorks 时健康检查应返回 warning，而不是协议错误。
+        assert isinstance(health["checks"]["solidworks_detected"], bool)
+        assert isinstance(health["issues"], list)
+        assert health["status"] == ("warning" if health["issues"] else "ok")
 
         blocked = await session.call_tool(
             "solidworks_create_basic_part",
