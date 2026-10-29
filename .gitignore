@@ -81,6 +81,11 @@ docs/architecture/evidence/**/*.SLDDRW
 docs/architecture/evidence/**/*.png
 docs/architecture/evidence/**/*.bmp
 
+# 本次本地交接和验证材料包含机器配置、会话记录及路径；保留在本机，
+# 未经过逐项脱敏与核对前不作为公开证据提交。
+/HANDOFF.md
+/docs/architecture/evidence/mcp-discovery-20261029/
+
 # 治理证明签名私钥：仅存于维护者本机，任何情况下不得入库
 *.private.pem
 .ed25519-private.pem
