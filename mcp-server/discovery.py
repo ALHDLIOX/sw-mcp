@@ -207,6 +207,9 @@ class ToolCatalog:
         if not any(_contains(q, term) for term in _OBJECTS):
             groups = [group for group in groups if group[0] not in _GENERIC_ACTION_GROUPS]
         words = {w for w in _WORDS.findall(q) if len(w) >= 2}
+        # 产品名出现在大多数工具名中，不应让它压过已识别的具体操作概念。
+        if groups:
+            words.discard("solidworks")
         # 只有单向意图才加权；"检查并修复"这类混合诉求不猜方向。
         read_intent = any(_contains(q, term) for term in _READ_INTENT)
         write_intent = any(_contains(q, term) for term in _WRITE_INTENT)
@@ -231,6 +234,9 @@ class ToolCatalog:
                     score += 6
                 elif _contains(text, word):
                     score += 1
+            # 产品名仅用于已有匹配证据的候选排序，不能单独召回无关工具。
+            if groups and score and _contains(q, "solidworks") and _contains(normalized_name, "solidworks"):
+                score += 1
             # 只调整已有证据的候选，避免纯靠意图把无关工具拉进结果。
             if score and intent:
                 score += 6 if self._is_read(name) == (intent > 0) else -6

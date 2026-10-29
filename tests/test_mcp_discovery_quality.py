@@ -93,6 +93,13 @@ def test_search_results_carry_effect_from_policy(tmp_path):
     assert write["effect"] == policy.Effect.WRITE.value
 
 
+@pytest.mark.parametrize("query", ["SolidWorks 版本号是多少", "SolidWorks version"])
+def test_version_query_finds_connection_tool_first(tmp_path, query):
+    catalog = _gate(tmp_path, "search").catalog()
+    results = catalog.search(query, 5)
+    assert results and results[0]["name"] == "solidworks_connect"
+
+
 def test_discovery_mode_cuts_initial_tool_list_size(tmp_path):
     full = _gate(tmp_path, "full")
     search = _gate(tmp_path, "search")
