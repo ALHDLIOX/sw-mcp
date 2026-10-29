@@ -220,11 +220,18 @@ from sw_connect import connect_solidworks, mm, deg, new_document
 
 1. 读取 `mcp-server/README.md`。
 2. 若用户要求自动配置 MCP，优先运行多客户端注册器：`powershell -ExecutionPolicy Bypass -File mcp-server/register_all_ai_mcp.ps1 -InstallDependencies`；它会尝试注册 Codex、Claude Code、Claude Desktop、Cursor、Windsurf。
-3. 使用本地 `stdio` MCP server：`python mcp-server/server.py`。
-4. 无 CAD 开放格式写入优先调用 `cadstudio_write_open_format`；DFM、Routing、FEA 和复杂几何分别调用 `cadstudio_check_dfm`、`cadstudio_check_routing`、`cadstudio_routing_preflight`、`cadstudio_fea_preflight`、`cadstudio_prepare_fea`、`cadstudio_run_fea`、`cadstudio_run_fea_convergence`、`cadstudio_review_advanced_geometry`、`cadstudio_create_ocp_loft`、`cadstudio_create_ocp_surface`；SolidWorks 原生操作再调用白名单 `solidworks_*` 工具。
-5. 不要暴露任意 Python/VBA 执行工具；新增 MCP 工具时应复用 `scripts/sw_*.py` 中已验证封装。
-6. SolidWorks COM 操作必须串行执行；MCP server 内部已使用全局锁降低桌面会话冲突。
-7. 基准 demo 使用 `examples/08_mini_fan_motion_assembly.py`；它验证自动建模、装配、Mate 和 Motion Study，不承诺圆角/倒角外观完美。
+3. 使用本地 `stdio` MCP server：`python mcp-server/server.py`；默认是发现模式（`SW_MCP_DISCOVERY=search`），只暴露 `sw_search_tools` / `sw_describe_tool` / `sw_call_tool`。需要全部命名工具时设 `SW_MCP_DISCOVERY=full`。
+4. 发现模式按「检索 → 读 Schema → 执行」使用：先 `sw_search_tools` 用中英文说法找候选，再 `sw_describe_tool` 确认参数，最后 `sw_call_tool`。不要凭猜测直接调用工具名。
+5. 默认发现模式信任客户端已经取得当前任务的授权；在用户授权范围内执行建模，不要逐项
+   要求额外批准。涉及用户未授权的覆盖、关闭或其他高风险操作时仍须取得明确授权。
+   可为已保存文档的活动文档写操作提供 `document_target`（绝对 `path` 和 SolidWorks
+   `process_id`），以校验目标；未提供时使用工具原有的活动文档行为。
+   如用户显式启用 `server` 逐次审批，工具返回请求 ID 时请用户在服务端运行
+   `python scripts/sw_mcp_approve.py approve <请求ID>`；目标无法核验时停止并说明限制。
+6. 无 CAD 开放格式写入优先调用 `cadstudio_write_open_format`；DFM、Routing、FEA 和复杂几何分别调用 `cadstudio_check_dfm`、`cadstudio_check_routing`、`cadstudio_routing_preflight`、`cadstudio_fea_preflight`、`cadstudio_prepare_fea`、`cadstudio_run_fea`、`cadstudio_run_fea_convergence`、`cadstudio_review_advanced_geometry`、`cadstudio_create_ocp_loft`、`cadstudio_create_ocp_surface`；SolidWorks 原生操作再调用白名单 `solidworks_*` 工具。
+7. 不要暴露任意 Python/VBA 执行工具；新增 MCP 工具时应复用 `scripts/sw_*.py` 中已验证封装。
+8. SolidWorks COM 操作必须串行执行；MCP server 内部已使用全局锁降低桌面会话冲突。
+9. 基准 demo 使用 `examples/08_mini_fan_motion_assembly.py`；它验证自动建模、装配、Mate 和 Motion Study，不承诺圆角/倒角外观完美。
 
 ### 运动装配体要求
 

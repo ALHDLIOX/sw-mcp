@@ -28,7 +28,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Literal, Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
+from mcp.types import CallToolResult, TextContent
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -53,6 +55,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 from scripts.sw_preflight import missing_com_dependencies, solidworks_installed  # noqa: E402
 from scripts.core.execution import normalize_tool_payload  # noqa: E402
 from artifact_access import ArtifactAccess, MAX_INLINE  # noqa: E402
+from document_identity import has_bound_document, verify_bound_document  # noqa: E402
 
 
 pythoncom = None
@@ -1190,9 +1193,14 @@ def _coinitialize() -> None:
 def _active_model_required():
     """Return the active SolidWorks document or raise a helpful error."""
     sw, model = connect_solidworks(wait_seconds=1)
-    model = sw.ActiveDoc or model
+    active = sw.ActiveDoc
+    # 已绑定目标时绝不能回退到 connect 返回的旧对象：活动文档可能已关闭。
+    model = active if has_bound_document() else (active or model)
     if model is None:
         raise RuntimeError("No active SolidWorks document. Use solidworks_open_document or solidworks_new_document first.")
+    if has_bound_document():
+        # 操作在 _run_locked 持锁期间进行，核验后将同一个 model 对象交给调用方。
+        verify_bound_document(get_com_member(sw, "GetProcessID"), get_com_member(model, "GetPathName"))
     return sw, model
 
 
@@ -1719,13 +1727,20 @@ def cadstudio_create_ocp_surface(params: CadStudioOcpSurfaceInput) -> str:
     },
 )
 def solidworks_connect(params: SolidWorksConnectInput = SolidWorksConnectInput()) -> str:
-    """Connect to a running SolidWorks instance or start one, then return active document status."""
+    """Connect to a running SolidWorks instance or start one; return the SolidWorks version (revision) and active document status."""
 
     def op():
         sw, model = connect_solidworks(wait_seconds=params.wait_seconds, visible=params.visible)
+        try:
+            process_id = int(get_com_member(sw, "GetProcessID"))
+            if process_id <= 0:
+                process_id = None
+        except Exception:
+            process_id = None
         return {
             "status": "ok",
             "revision": get_com_member(sw, "RevisionNumber"),
+            "process_id": process_id,
             "active_document": _model_summary(model) if model else None,
         }
 
@@ -3614,6 +3629,81 @@ from scripts.sw_native_wire import register_tools as _register_native_wire_tools
 _register_native_wire_tools(
     mcp, lambda **kwargs: connect_solidworks(**kwargs), _run_locked, ResponseFormat,
 )
+
+
+# ---------------------------------------------------------------------------
+# 工具发现（默认）与原生完整模式
+# ---------------------------------------------------------------------------
+# 新版默认只暴露三个入口，把 66 个工具的 Schema 从上下文里拿掉；老客户端可以
+# 设置 SW_MCP_DISCOVERY=full 继续用原来的逐工具界面。
+_DISCOVERY_MODE = os.environ.get("SW_MCP_DISCOVERY", "search").strip().lower()
+_APPROVAL_MODE = os.environ.get("SW_MCP_APPROVAL", "auto").strip().lower()
+
+from gate import DISCOVERY_TOOLS, ToolGate  # noqa: E402
+
+# @brief 注册表换成网关代理：此时工具已全部注册，之后所有 list/call 都经过它。
+_gate = ToolGate(mcp._tool_manager, mode=_DISCOVERY_MODE, approval_mode=_APPROVAL_MODE)
+mcp._tool_manager = _gate
+
+
+@mcp.tool(
+    name="sw_search_tools",
+    title="Search Tool Catalog",
+    annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+)
+def sw_search_tools(query: str, limit: int = 5) -> str:
+    """按中英文 CAD 术语、命令名或别名检索工具，返回少量候选及其副作用等级；不执行任何操作。"""
+    try:
+        results = _gate.search(query, limit)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    return json.dumps(
+        {"query": query, "count": len(results), "results": results},
+        ensure_ascii=False,
+    )
+
+
+@mcp.tool(
+    name="sw_describe_tool",
+    title="Describe Tool",
+    annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+)
+def sw_describe_tool(name: str) -> str:
+    """返回一个工具的完整输入 Schema、副作用等级，以及执行前是否需要人工批准。"""
+    tool = _gate.describe(name)
+    if tool is None:
+        raise ToolError(f"未知工具: {name}。先用 sw_search_tools 检索。")
+    return json.dumps(tool, ensure_ascii=False)
+
+
+@mcp.tool(
+    name="sw_call_tool",
+    title="Call Tool by Name",
+    annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
+)
+async def sw_call_tool(name: str, arguments: Dict[str, Any] | None = None,
+                       document_target: Dict[str, Any] | None = None, ctx: Context = None) -> Any:
+    """按名称执行工具；可选提供已保存文档路径和 SolidWorks 进程 ID 以核验目标。"""
+    if name in DISCOVERY_TOOLS:
+        raise ToolError("sw_call_tool 不能调用发现入口自身。")
+    if _gate.get_tool(name) is None:
+        raise ToolError(f"未知工具: {name}。先用 sw_search_tools 检索。")
+    result = await _gate.call_tool(name, arguments or {}, context=ctx, convert_result=True,
+                                   document_target=document_target)
+    # FastMCP 的嵌套调用可能同时返回 content 和 structuredContent；直接返回
+    # tuple 会被外层工具再次转换成纯文本，导致调用方丢失结构化结果。
+    if isinstance(result, CallToolResult):
+        return result
+    if isinstance(result, tuple) and len(result) == 2:
+        content, structured = result
+        return CallToolResult(content=list(content), structuredContent=structured, isError=False)
+    if isinstance(result, dict):
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(result, indent=2))],
+            structuredContent=result,
+            isError=False,
+        )
+    return CallToolResult(content=list(result), isError=False)
 
 
 def main() -> None:
