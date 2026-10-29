@@ -49,7 +49,7 @@ def _fixture(tmp_path, monkeypatch):
             return {"status": "ok"}
         return server._run_locked(op, server.ResponseFormat.JSON, load_automation=False)
 
-    gate = ToolGate(mcp._tool_manager, ledger=ApprovalLedger(tmp_path / "ledger"))
+    gate = ToolGate(mcp._tool_manager, approval_mode="server", ledger=ApprovalLedger(tmp_path / "ledger"))
     target = {"process_id": selected["pid"], "path": selected["path"]}
     return gate, target, selected, changed
 
@@ -106,6 +106,18 @@ def test_closed_active_document_does_not_fall_back_to_stale_model(tmp_path, monk
         server._active_model_required()
 
 
+def test_task_mode_honors_an_explicit_document_target_without_prompt(tmp_path, monkeypatch):
+    strict_gate, target, selected, changed = _fixture(tmp_path, monkeypatch)
+    gate = ToolGate(strict_gate._manager, approval_mode="task", ledger=strict_gate.ledger)
+    selected["path"] = str(tmp_path / "other.SLDPRT")
+    result = json.loads(_call(gate, target))
+    assert result["status"] == "error"
+    assert changed == []
+    selected["path"] = target["path"]
+    assert json.loads(_call(gate, target))["status"] == "ok"
+    assert changed == [target["path"]]
+
+
 def _fixture_stdio_server():
     """为协议集成测试替换内存工具，无真实 SolidWorks 或文件写操作。"""
     class Document:
@@ -123,7 +135,19 @@ def _fixture_stdio_server():
     server.get_com_member = lambda obj, name: getattr(obj, name)()
     server.pythoncom = None
     server._artifact_access = lambda: type("Artifacts", (), {"publish": lambda self, _: []})()
-    server._gate.remove_tool("solidworks_save_document")
+    for name in ("solidworks_save_document", "solidworks_create_basic_part", "solidworks_sketch_and_extrude"):
+        server._gate.remove_tool(name)
+
+    @server.mcp.tool(name="solidworks_create_basic_part")
+    def create(params: dict) -> str:
+        return json.dumps({"status": "ok", "step": "create"})
+
+    @server.mcp.tool(name="solidworks_sketch_and_extrude")
+    def extrude(params: dict) -> str:
+        def op():
+            server._active_model_required()
+            return {"status": "ok", "step": "extrude"}
+        return server._run_locked(op, server.ResponseFormat.JSON, load_automation=False)
 
     @server.mcp.tool(name="solidworks_save_document")
     def save(params: dict) -> str:
@@ -157,6 +181,30 @@ def test_stdio_gateway_binds_approval_to_document_and_executes_mock(tmp_path):
                 result = await session.call_tool("sw_call_tool", args)
                 assert not result.isError
                 assert json.loads(result.content[0].text)["status"] == "ok"
+
+    asyncio.run(run())
+
+
+def test_stdio_default_task_mode_executes_without_per_tool_prompt(tmp_path):
+    # 模拟未保存文档，验证创建、编辑、保存的多步任务不会要求 PID/路径或重复审批。
+    doc = ""
+    ledger_dir = tmp_path / "ledger"
+    env = {**os.environ, "SW_MCP_DISCOVERY": "search", "SW_MCP_APPROVAL": "auto",
+           "SW_MCP_APPROVAL_DIR": str(ledger_dir), "TEST_DOCUMENT_PATH": doc}
+    params = StdioServerParameters(command=sys.executable, args=[str(Path(__file__).resolve()), "--fixture"],
+                                   cwd=str(ROOT), env=env)
+
+    async def run():
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                for name in ("solidworks_create_basic_part", "solidworks_sketch_and_extrude", "solidworks_save_document"):
+                    result = await session.call_tool("sw_call_tool", {
+                        "name": name, "arguments": {"params": {}}
+                    })
+                    assert not result.isError
+                    assert json.loads(result.content[0].text)["status"] == "ok"
+                assert not ledger_dir.exists()
 
     asyncio.run(run())
 

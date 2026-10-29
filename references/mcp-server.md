@@ -40,11 +40,12 @@ SolidWorks 是 Windows 桌面 COM 应用，不是原生 MCP 服务。MCP Server 
 - `mcp-server/policy.py`：副作用唯一真源（READ / WRITE / DESTRUCTIVE / UNKNOWN）；
   未登记的工具默认拒绝，新增工具必须先补分级，`tests/test_mcp_discovery.py` 会强制对齐注册表。
 - `mcp-server/gate.py`：可见性控制、执行前策略检查、写操作审批。
-- `mcp-server/approval.py`：HMAC 签名的一次性批准账本；批准绑定工具、参数摘要、服务端会话和有效期，不能识别隐式活动文档。
+- `mcp-server/approval.py`：可选的 HMAC 签名一次性批准账本；批准绑定工具、参数摘要、服务端会话和有效期。严格模式可绑定已保存文档的进程 ID 与路径，但不能证明文档内容未改变。
 - `scripts/sw_mcp_approve.py`：通过交互式终端确认；模型在 MCP 参数里传 `approved: true` 不生效。TTY 不证明真人，同一操作系统用户的进程可模拟终端或访问账本，不能将它视作隔离不可信 Agent 的安全边界。
 
-审批模式 `SW_MCP_APPROVAL`：`auto`（默认，发现模式→`server`，完整模式→`client`）、
-`server`、`client`、`elicit`、`off`。`elicit` 依赖客户端支持 MCP elicitation，且可能被
+审批模式 `SW_MCP_APPROVAL`：`auto`（默认，发现模式→`task`，完整模式→`client`）、
+`task`、`server`、`client`、`elicit`、`off`。`task` 信任客户端任务授权，服务端不会验证其是否经过用户确认。
+`elicit` 依赖客户端支持 MCP elicitation，且可能被
 agent 自动应答，不作为默认。服务端账本同样不隔离具有相同操作系统权限的进程。
 
 ## 多客户端注册策略

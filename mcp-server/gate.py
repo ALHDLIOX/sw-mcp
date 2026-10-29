@@ -28,7 +28,8 @@ logger = logging.getLogger("solidworks_mcp.gate")
 DISCOVERY_TOOLS = ("sw_search_tools", "sw_describe_tool", "sw_call_tool")
 
 MODES = ("full", "search")
-APPROVAL_MODES = ("auto", "server", "client", "elicit", "off")
+APPROVAL_MODES = ("auto", "task", "server", "client", "elicit", "off")
+_EXTERNAL_APPROVAL_MODES = ("task", "client", "off")
 
 
 class _Confirm(BaseModel):
@@ -48,7 +49,7 @@ class ToolGate:
             raise ValueError("发现模式不能使用 client 审批：客户端只能看到通用入口，无法按原工具审批。")
         self._manager = manager
         self.mode = mode
-        self.approval_mode = "server" if (approval_mode == "auto" and mode == "search") else (
+        self.approval_mode = "task" if (approval_mode == "auto" and mode == "search") else (
             "client" if approval_mode == "auto" else approval_mode)
         # 注册工具、打包与只读调用不应在用户目录中创建审批账本。
         self._ledger = ledger
@@ -126,7 +127,7 @@ class ToolGate:
             item["effect"] = effect.value
             blocked = self._blocked_reason(item["name"])
             item["available"] = blocked is None
-            if (self.approval_mode not in ("off", "client")
+            if (self.approval_mode not in _EXTERNAL_APPROVAL_MODES
                     and policy.supports_document_identity(item["name"])):
                 item["document_target_required"] = True
             if blocked:
@@ -140,8 +141,10 @@ class ToolGate:
         view = {key: tool[key] for key in ("name", "title", "description", "inputSchema", "outputSchema", "annotations", "icons", "_meta") if key in tool}
         effect, note = policy.classify(name)
         view["effect"] = effect.value
-        view["approval_required"] = policy.requires_approval(effect)
-        if (self.approval_mode not in ("off", "client")
+        view["approval_required"] = (policy.requires_approval(effect)
+                                     and self.approval_mode not in _EXTERNAL_APPROVAL_MODES)
+        view["approval_mode"] = self.approval_mode
+        if (self.approval_mode not in _EXTERNAL_APPROVAL_MODES
                 and policy.supports_document_identity(name)):
             view["document_target_required"] = True
             view["document_target_note"] = "通过 sw_call_tool 提供已保存文档的绝对路径和 SolidWorks 进程 ID。"
@@ -154,7 +157,7 @@ class ToolGate:
         return view
 
     def _blocked_reason(self, name: str) -> str | None:
-        if (self.approval_mode not in ("off", "client")
+        if (self.approval_mode not in _EXTERNAL_APPROVAL_MODES
                 and policy.needs_active_document_identity(name)
                 and not policy.supports_document_identity(name)):
             return (
@@ -184,8 +187,10 @@ class ToolGate:
 
         identity = None
         approval_arguments: dict[str, Any] = arguments
-        if (self.approval_mode not in ("off", "client")
-                and policy.supports_document_identity(name)):
+        if document_target is not None and policy.needs_active_document_identity(name) and not policy.supports_document_identity(name):
+            raise ToolError(f"{name} 暂不支持 document_target 校验，无法使用此目标参数。")
+        if (policy.supports_document_identity(name)
+                and (self.approval_mode not in _EXTERNAL_APPROVAL_MODES or document_target is not None)):
             if not isinstance(document_target, dict) or set(document_target) != {"process_id", "path"}:
                 raise ToolError("该操作需要 document_target：已保存文档绝对路径 path 和 SolidWorks 进程 ID process_id。")
             try:
@@ -196,7 +201,7 @@ class ToolGate:
                 "process_id": identity.process_id, "path": identity.path,
             }}
 
-        if policy.requires_approval(effect) and self.approval_mode not in ("off", "client"):
+        if policy.requires_approval(effect) and self.approval_mode not in _EXTERNAL_APPROVAL_MODES:
             subject = self._subject(context)
             allowed = await self._authorize(name, approval_arguments, effect, note, context, subject)
             if not allowed:

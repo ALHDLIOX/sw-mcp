@@ -3683,7 +3683,7 @@ def sw_describe_tool(name: str) -> str:
 )
 async def sw_call_tool(name: str, arguments: Dict[str, Any] | None = None,
                        document_target: Dict[str, Any] | None = None, ctx: Context = None) -> Any:
-    """按名称执行工具；活动文档操作需提供已保存文档路径和 SolidWorks 进程 ID。"""
+    """按名称执行工具；可选提供已保存文档路径和 SolidWorks 进程 ID 以核验目标。"""
     if name in DISCOVERY_TOOLS:
         raise ToolError("sw_call_tool 不能调用发现入口自身。")
     if _gate.get_tool(name) is None:

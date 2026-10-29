@@ -91,7 +91,7 @@ def test_health_check_with_start_requires_approval(tmp_path):
         return "ok"
 
     server.add_tool(health, name="solidworks_health_check")
-    gate = ToolGate(server._tool_manager, ledger=ApprovalLedger(tmp_path / "ledger"))
+    gate = ToolGate(server._tool_manager, approval_mode="server", ledger=ApprovalLedger(tmp_path / "ledger"))
     with pytest.raises(ToolError, match="需要人工批准"):
         asyncio.run(gate.call_tool("solidworks_health_check", {"params": {"start_solidworks": True}}))
     assert called == []
@@ -110,7 +110,7 @@ def test_report_writing_tools_require_approval(tmp_path, name):
         return "unexpected"
 
     server.add_tool(write_report, name=name)
-    gate = ToolGate(server._tool_manager, ledger=ApprovalLedger(tmp_path / "ledger"))
+    gate = ToolGate(server._tool_manager, approval_mode="server", ledger=ApprovalLedger(tmp_path / "ledger"))
     assert policy.classify(name)[0] is policy.Effect.WRITE
     with pytest.raises(ToolError):
         asyncio.run(gate.call_tool(name, {}))
@@ -221,10 +221,22 @@ def test_off_mode_is_the_explicit_opt_out(tmp_path):
 
 
 def test_auto_mode_matches_documented_defaults(tmp_path):
-    """search 默认服务端审批；full 默认沿用客户端审批。"""
+    """search 默认依赖客户端的任务授权；full 沿用客户端审批。"""
     ledger = ApprovalLedger(tmp_path / "approvals")
-    assert ToolGate(_fake_manager(), ledger=ledger).approval_mode == "server"
+    assert ToolGate(_fake_manager(), ledger=ledger).approval_mode == "task"
     assert ToolGate(_fake_manager(), mode="full", ledger=ledger).approval_mode == "client"
+
+
+def test_task_approval_mode_does_not_require_per_tool_confirmation(tmp_path):
+    gate = _gate(tmp_path, approval="task")
+    arguments = {"params": {"path": "D:/work/a.SLDPRT"}}
+    result = asyncio.run(gate.call_tool("solidworks_save_document", arguments))
+    assert json.loads(result)["tool"] == "save"
+    assert gate.ledger.pending() == []
+    detail = gate.describe("solidworks_save_document")
+    assert detail["available"] is True
+    assert detail["approval_required"] is False
+    assert detail["approval_mode"] == "task"
 
 
 class _ElicitContext:
@@ -351,7 +363,7 @@ def _stdio_env(tmp_path: Path, mode: str) -> dict[str, str]:
     return {
         **os.environ,
         "SW_MCP_DISCOVERY": mode,
-        "SW_MCP_APPROVAL": "auto",
+        "SW_MCP_APPROVAL": "server",
         "SW_MCP_APPROVAL_DIR": str(tmp_path / "approvals"),
     }
 

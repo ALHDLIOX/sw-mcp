@@ -30,8 +30,9 @@ python mcp-server\server.py
 
 ## 工具发现模式（默认）
 
-默认 `SW_MCP_DISCOVERY=search`：`tools/list` 只暴露三个发现入口，66 个原生工具可按需检索；
-实际执行仍受审批策略和活动文档身份限制。初始工具列表体积可通过
+默认 `SW_MCP_DISCOVERY=search`：`tools/list` 只暴露三个发现入口，66 个原生工具可按需检索。
+默认信任客户端已取得当前任务授权，任务内调用不再逐次请求服务端批准；需要更严格控制时
+可启用 `server` 模式。初始工具列表体积可通过
 `python -m pytest -q tests/test_mcp_discovery_quality.py` 验证。
 
 | 入口 | 作用 |
@@ -50,10 +51,19 @@ python mcp-server\server.py
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `SW_MCP_DISCOVERY` | `search` | `search` 发现模式；`full` 原生命名工具 |
-| `SW_MCP_APPROVAL` | `auto` | `auto`：发现模式用 `server`、完整模式用 `client`；`server`：本地审批账本；`client`：交给客户端逐工具审批，仅允许完整模式；`elicit`：走 MCP elicitation（要求客户端支持，可能被 agent 自动应答）；`off`：关闭服务端审批 |
+| `SW_MCP_APPROVAL` | `auto` | `auto`：发现模式用 `task`、完整模式用 `client`；`task`：信任客户端的任务授权，不逐次确认；`server`：本地逐次审批账本；`client`：交给客户端逐工具审批，仅允许完整模式；`elicit`：走 MCP elicitation（可能被 agent 自动应答）；`off`：关闭服务端审批 |
 | `SW_MCP_APPROVAL_DIR` | `%LOCALAPPDATA%\SolidWorksMCP\approvals` | 审批账本目录 |
 
-### 写操作人工审批（`server` 模式）
+### 任务授权和可选逐次审批
+
+默认 `task` 模式由客户端或用户负责界定任务授权；MCP 服务端**不能验证**客户端是否实际
+询问过用户，不提供逐工具权限隔离。服务端仍会拒绝未登记的工具，并沿用参数校验、
+目标限制与 SolidWorks 串行执行；具备相同本机权限的进程可以绕过本服务。
+
+已保存文档的活动文档操作可选传入 `document_target`（绝对 `path` 和 `process_id`），
+服务端将核对目标；不传时沿用工具原有的活动文档行为，以支持未保存文档和现有工作流。
+
+以下是显式选择 `SW_MCP_APPROVAL=server` 时的逐次审批机制。
 
 **信任边界：**审批账本和命令行运行在同一操作系统用户权限下。TTY 检查不能证明
 输入来自真人：具有该用户权限的进程可能模拟终端或直接访问账本和签名密钥。因此，
@@ -87,9 +97,6 @@ python scripts\sw_mcp_approve.py approve <请求ID>
 请求记录和授权记录各有 1000 条上限；达到上限时服务端安全拒绝新增记录，不自动删除
 历史文件。用户需确认记录归属后自行备份和归档，才能继续使用审批。
 
-`*` 只覆盖写工具，不覆盖删除/打包/批量导出等破坏性操作；路径按目录段匹配，`D:\work`
-不会覆盖 `D:\workshop`。
-
 ### 回滚到旧行为
 
 在 MCP 客户端配置里给 server 进程加环境变量：
@@ -102,7 +109,7 @@ python scripts\sw_mcp_approve.py approve <请求ID>
 }
 ```
 
-即恢复「全部原生工具可见 + 客户端逐工具审批」。不改环境变量、仅升级版本的客户端默认使用发现模式。
+即恢复全部原生工具可见，并由客户端决定是否逐工具审批。不改环境变量、仅升级版本的客户端默认使用发现模式。
 
 ### 协议验证
 
