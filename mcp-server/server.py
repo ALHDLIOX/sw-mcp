@@ -743,6 +743,7 @@ class DesignSpecBuildInput(BaseInput):
 class SolidWorksRecoverInput(BaseInput):
     """Input for diagnosing and recovering a blocked SolidWorks session."""
 
+    response_format: ResponseFormat = Field(default=ResponseFormat.JSON, description="Return format.")
     dismiss_dialogs: bool = Field(
         default=False,
         description=(

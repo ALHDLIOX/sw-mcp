@@ -6,6 +6,7 @@ import glob
 import os
 import tempfile
 import time
+import threading
 from pathlib import Path
 try:
     from .sw_file_load import SolidWorksDocumentOpenError, classify_sw_file_load_errors, classify_sw_file_load_warnings
@@ -49,6 +50,10 @@ DEFAULT_TEMPLATE_PREFS = {
 }
 
 SW_ALWAYS_USE_DEFAULT_TEMPLATES = 111
+
+# Keep automation-started applications alive between MCP calls. COM proxies must
+# stay in their owning apartment, so this cache is local to the calling thread.
+_connection_state = threading.local()
 
 
 class SolidWorksConnectionError(RuntimeError):
@@ -273,6 +278,24 @@ def connect_solidworks(version=None, wait_seconds=5, visible=True, return_metada
     launched_here = False
     dispatched = False
 
+    cached = getattr(_connection_state, "application", None)
+    if cached is not None:
+        try:
+            actual = get_sw_version(cached)
+            pid = int(get_com_member(cached, "GetProcessID"))
+            processes = solidworks_processes()
+            if processes is not None and pid in processes and (version is None or actual["year"] == int(version)):
+                model = _read_active_document(cached)
+                metadata = {
+                    "prog_id": prog_id, "requested_version": int(version) if version is not None else None,
+                    "started_by_cad_studio": False, "actual_version": actual["year"],
+                    "actual_revision": actual["revision"], "process_id": pid,
+                }
+                return (cached, model, metadata) if return_metadata else (cached, model)
+        except Exception:
+            pass
+        _connection_state.application = None
+
     # 启动和附着共享同一把互斥锁，避免多个 worker 同时拉起实例。
     with _LaunchGuard():
         before = solidworks_processes()
@@ -346,6 +369,7 @@ def connect_solidworks(version=None, wait_seconds=5, visible=True, return_metada
         "actual_revision": actual["revision"],
         "process_id": get_com_member(sw, "GetProcessID", default=None),
     }
+    _connection_state.application = sw
     return (sw, model, metadata) if return_metadata else (sw, model)
 
 

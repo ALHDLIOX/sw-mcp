@@ -37,7 +37,7 @@ def export_to_stl(model, output_path, quality="fine"):
         quality: "coarse" | "fine" | "custom"
     """
     # 设置 STL 质量
-    quality_map = {"coarse": 1, "fine": 0}
+    quality_map = {"coarse": 1, "fine": 2}
     if quality in quality_map:
         model.SetUserPreferenceIntegerValue(78, quality_map[quality])  # swSTLQuality
     return _export_generic(model, output_path)
