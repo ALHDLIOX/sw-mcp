@@ -34,7 +34,7 @@ python mcp-server\server.py
 
 ## 工具发现模式（默认）
 
-默认 `SW_MCP_DISCOVERY=search`：`tools/list` 只暴露三个发现入口，67 个原生工具可按需检索。
+默认 `SW_MCP_DISCOVERY=search`：`tools/list` 只暴露三个发现入口，68 个原生工具可按需检索。
 默认信任客户端已取得当前任务授权，任务内调用不再逐次请求服务端批准；需要更严格控制时
 可启用 `server` 模式。初始工具列表体积可通过
 `python -m pytest -q tests/test_mcp_discovery_quality.py` 验证。
@@ -47,7 +47,7 @@ python mcp-server\server.py
 
 直接点名调用被隐藏的原生工具同样会经过网关，未知工具一律拒绝。
 
-需要客户端逐工具展示权限提示时，用 `SW_MCP_DISCOVERY=full` 显示全部 67 个命名工具。
+需要客户端逐工具展示权限提示时，用 `SW_MCP_DISCOVERY=full` 显示全部 68 个命名工具。
 两种模式共用同一套执行检查；`stdio` 和 `--transport streamable-http` 行为一致。
 
 ### 环境变量
@@ -128,7 +128,7 @@ python scripts\validate_mcp.py --mode search
 ```
 
 发现模式校验会确认 3 个入口可见、每个必需工具都能按名称检索并读到 Schema；完整模式校验
-67 个工具全部可见。
+68 个工具全部可见。
 
 ## HTTP 传输（streamable-http）
 
@@ -180,7 +180,7 @@ python mcp-server\server.py --transport streamable-http --host 0.0.0.0 --port 80
 - 读取适配复用既有 Artifact Ledger；文件改变、目录越界或任意路径参数均不能作为已验证产物读取。
 
 远端输入仍需预先放到 CAD 主机；产物读取接口只服务已有交付文件。
-工具**当前共 67 个**：保留原有命名工具，新增按版本查证 API 的只读工具；原有连接工具增加了可选的目标版本参数。发现模式下这些工具不出现在 `tools/list` 中，但检索、Schema 读取和执行行为与完整模式一致。
+工具**当前共 68 个**：保留原有命名工具，新增按版本查证 API 的只读工具和本 Fork 的配方出图工具；原有连接工具增加了可选的目标版本参数。发现模式下这些工具不出现在 `tools/list` 中，但检索、Schema 读取和执行行为与完整模式一致。
 
 ## Smithery 发布
 
@@ -195,7 +195,7 @@ smithery mcp publish .\dist\solidworks-automation-skill-1.3.0-smithery.mcpb `
   -n wzyn20051216/solidworks-automation-skill
 ```
 
-Smithery 当前发布接口要求工具卡包含 `inputSchema`，而 MCPB 0.4 的静态 `tools` 项不允许该字段，因此发布包由脚本从 MCP Server 注册表自动生成，避免手工维护两套 schema。工具卡来自完整注册表（70 项：67 个原生工具 + 3 个发现入口），与运行时 `SW_MCP_DISCOVERY` 的选择无关。
+Smithery 当前发布接口要求工具卡包含 `inputSchema`，而 MCPB 0.4 的静态 `tools` 项不允许该字段，因此发布包由脚本从 MCP Server 注册表自动生成，避免手工维护两套 schema。工具卡来自完整注册表（71 项：68 个原生工具 + 3 个发现入口），与运行时 `SW_MCP_DISCOVERY` 的选择无关。
 
 ## 多客户端自动注册
 
