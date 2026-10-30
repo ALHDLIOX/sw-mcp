@@ -17,6 +17,7 @@
     {"id": "ocp-loft", "query": "用 OCP 创建一个放样实体", "expect": "cadstudio_create_ocp_loft", "top1": true},
     {"id": "ocp-surface", "query": "创建曲面并加厚", "expect": "cadstudio_create_ocp_surface", "top1": true},
     {"id": "connect", "query": "连接 SolidWorks", "expect": "solidworks_connect", "top1": true},
+    {"id": "api-lookup", "query": "查证 SolidWorks API 接口签名", "expect": "solidworks_lookup_api", "top1": true},
     {"id": "health-check", "query": "环境诊断 Python 和 COM 是否正常", "expect": "solidworks_health_check", "top1": true},
     {"id": "recover", "query": "SolidWorks 卡住了 帮我恢复", "expect": "solidworks_recover", "top1": true},
     {"id": "new-document", "query": "新建一个零件文档", "expect": "solidworks_new_document", "top1": true},

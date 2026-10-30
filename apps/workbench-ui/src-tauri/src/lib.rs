@@ -805,6 +805,18 @@ fn validate_new_queue_job(job: &Value) -> Result<(), String> {
         let knowledge = knowledge
             .as_object()
             .ok_or_else(|| "uiConfig.knowledgeBase 必须是对象。".to_string())?;
+        if knowledge
+            .get("officialApiDocsEnabled")
+            .is_some_and(|value| !value.is_boolean())
+        {
+            return Err("officialApiDocsEnabled 必须是布尔值。".to_string());
+        }
+        if knowledge
+            .get("parallelApiFallbackEnabled")
+            .is_some_and(|value| !value.is_boolean())
+        {
+            return Err("parallelApiFallbackEnabled 必须是布尔值。".to_string());
+        }
         if knowledge.get("cloudEnabled").and_then(Value::as_bool) == Some(true) {
             let endpoint = knowledge
                 .get("endpoint")
@@ -3201,6 +3213,24 @@ mod tests {
         job["uiConfig"]["knowledgeBase"]["tokenEnv"] = json!("AWS_SECRET_ACCESS_KEY");
         let error = validate_new_queue_job(&job).expect_err("arbitrary env token must be rejected");
         assert!(error.contains("CAD_STUDIO_RAG_TOKEN"));
+    }
+
+    #[test]
+    fn validates_official_api_document_switch() {
+        let mut job = queued_job();
+        job["uiConfig"]["knowledgeBase"]["officialApiDocsEnabled"] = json!(false);
+        validate_new_queue_job(&job).expect("boolean switch is valid");
+        job["uiConfig"]["knowledgeBase"]["officialApiDocsEnabled"] = json!("false");
+        assert!(validate_new_queue_job(&job)
+            .expect_err("invalid switch")
+            .contains("officialApiDocsEnabled"));
+        job["uiConfig"]["knowledgeBase"]["officialApiDocsEnabled"] = json!(true);
+        job["uiConfig"]["knowledgeBase"]["parallelApiFallbackEnabled"] = json!(false);
+        validate_new_queue_job(&job).expect("boolean parallel switch is valid");
+        job["uiConfig"]["knowledgeBase"]["parallelApiFallbackEnabled"] = json!("false");
+        assert!(validate_new_queue_job(&job)
+            .expect_err("invalid parallel switch")
+            .contains("parallelApiFallbackEnabled"));
     }
 
     #[test]

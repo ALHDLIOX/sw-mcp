@@ -131,7 +131,7 @@ with SolidWorksSession(version=2026) as session:
 | 复杂曲面与模具 | `scripts/advanced_geometry.py`、`scripts/advanced_geometry_ocp.py`、`scripts/advanced_surface_ocp.py`、`scripts/cad_studio.py review-advanced-geometry/create-ocp-loft/create-ocp-surface` | 直纹/平滑 Loft、受限 Sweep/Knit/Thicken 可写并重开 B-Rep；G1/G2 和曲率半径只返回离散采样证据 |
 | 本地 MCP Server | `mcp-server/server.py` | `mcp-server/README.md`、`references/mcp-server.md` |
 | MCP 协议验证 | `scripts/validate_mcp.py` | `mcp-server/README.md` |
-| 未封装 API 查证 | - | `references/api-lookup.md` |
+| 版本化 API 查证 | `scripts/sw_api_lookup.py` | `references/api-lookup.md` |
 | OpenClaw 控制 SolidWorks | - | `references/openclaw.md` |
 | 钣金/焊件/仿真/属性 | - | `references/advanced.md` |
 | 企业 Agent / 本地优先与云 RAG | `apps/desktop/cad_workbench/knowledge_retrieval.py` | `references/enterprise-agent-rag.md` |
@@ -270,11 +270,13 @@ assert result.ok, result.issues
 
 当任务需要调用 `scripts/` 中尚未封装的 SolidWorks API 时：
 
-1. 先读取 `references/api-lookup.md`，再查询 SolidWorks 官方 API 文档，或本地 SolidWorks SDK / 参考资料，确认方法签名、参数含义、枚举值、返回值和版本差异。
+1. 先读取 `references/api-lookup.md`，使用 `python SKILL_DIR/scripts/sw_api_lookup.py 接口 方法` 查询目标版本的本地类型库与官方文档；已知目标年份时加 `--version 2024`，多实例时加 `--process-id`。确认签名、单位、前提和版本差异。
 2. 禁止凭记忆猜接口；尤其是长参数 COM 方法、`VARIANT` / by-ref 参数、枚举值、选择标记和 `SaveAs` 类接口。
 3. 写代码时保留最小可运行脚本，并对每一步返回值做 `None` / `False` 检查。
 4. 实现后必须真实运行，保存或导出目标文件，并使用 `sw_review.py` 生成预览图与审查报告。
 5. 新发现的坑、错误码、兼容写法或稳定封装，要补充到 `references/troubleshooting.md` 或对应模块参考文档；常用逻辑再沉淀进 `scripts/`。
+
+查证默认可访问 SolidWorks 官方文档，官网直读失败且没有缓存时使用匿名 Parallel 备用查询；仅发送公开版本、接口、成员及官方链接。`--offline` 或 `SW_API_LOOKUP_NETWORK=off` 禁止本工具联网，`--no-parallel` 或 `SW_API_LOOKUP_PARALLEL=off` 单独关闭 Parallel。离线可用本机帮助及上次获取的缓存，须留意版本证据和获取时间。文档不足时可在客户端允许的范围内使用其自带搜索，仅搜索公开 API 标识；客户端自己的联网权限由客户端控制。接口声明、官方说明和真机行为分别判断，缺少目标版本或运行验证时不得声称已验证兼容。
 
 ## 结果自审查
 
@@ -305,7 +307,7 @@ print(report["evaluation"])
 ## 关键注意事项
 
 - **单位**：API 统一使用**米**。用 `mm(50)` 转换 50mm 为 0.05m，用 `deg(90)` 转换角度
-- **版本**：使用 `SldWorks.Application` 自动连接，兼容所有版本
+- **版本**：可指定 SolidWorks 年份并核对目标实例；不同操作的兼容性以 `capabilities.yaml` 和实际版本证据为准，不能将连接成功视为所有功能兼容
 - **选择**：能拿到 COM 对象时优先用对象级 `Select2()`；基准面可用 `SelectByID2("PLANE")`，草图不要只依赖 `SelectByID2("SKETCH")`
 - **草图**：推荐用 `with sketch(model, "Front Plane") as sketch_name:` 自动进入/退出草图；`sw_part.py` 会缓存草图对象引用，避免 SW2024 中文版按名称选择草图失败
 - **添加组件**：装配体优先用 `sw_assembly.add_component()`；SW2024 中文版下 `AddComponent4` 可能返回 `None`，封装会用 `AddComponent5`、静默打开零件、重新激活装配体后重试

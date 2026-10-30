@@ -30,6 +30,7 @@ _READ: frozenset[str] = frozenset({
     "cadstudio_read_artifact",
     "solidworks_addin_host_status",
     "solidworks_health_check",
+    "solidworks_lookup_api",
     "solidworks_list_edges",
     "solidworks_mass_properties",
     "solidworks_bounding_box",
@@ -101,6 +102,7 @@ _DESTRUCTIVE: frozenset[str] = frozenset({
 
 _NOTES: dict[str, str] = {
     "solidworks_health_check": "start_solidworks=true 时会启动或连接 SolidWorks，需审批。",
+    "solidworks_lookup_api": "默认查询官方文档；直读失败且无缓存时使用匿名 Parallel 备用服务，仅发送公开 API 标识及版本；offline=true 可关闭联网。",
     "cadstudio_check_dfm": "会将检查报告写入输出路径。",
     "cadstudio_check_routing": "会将检查报告写入输出路径。",
     "cadstudio_review_advanced_geometry": "会将预检报告写入输出路径。",

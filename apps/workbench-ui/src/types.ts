@@ -62,6 +62,8 @@ export type ApiIntegrationConfig = {
 };
 export type KnowledgeBaseConfig = {
   cloudEnabled: boolean;
+  officialApiDocsEnabled?: boolean;
+  parallelApiFallbackEnabled?: boolean;
   localRoots: string[];
   endpoint: string;
   namespace: string;

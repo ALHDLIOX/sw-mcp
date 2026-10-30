@@ -296,6 +296,8 @@ const wallpaperMotionLabels: Record<WallpaperMotionMode, string> = {
 };
 const defaultKnowledgeBase: KnowledgeBaseConfig = {
   cloudEnabled: false,
+  officialApiDocsEnabled: true,
+  parallelApiFallbackEnabled: true,
   localRoots: [],
   endpoint: "",
   namespace: "mechanical-engineering",
@@ -521,6 +523,8 @@ function loadSettings(payload?: unknown): AppSettings | null {
       knowledgeBase: parsed.knowledgeBase
         ? {
             cloudEnabled: parsed.knowledgeBase.cloudEnabled === true,
+            officialApiDocsEnabled: parsed.knowledgeBase.officialApiDocsEnabled === undefined || parsed.knowledgeBase.officialApiDocsEnabled === true,
+            parallelApiFallbackEnabled: parsed.knowledgeBase.parallelApiFallbackEnabled === undefined || parsed.knowledgeBase.parallelApiFallbackEnabled === true,
             localRoots: Array.isArray(parsed.knowledgeBase.localRoots) ? parsed.knowledgeBase.localRoots.filter((item): item is string => typeof item === "string").slice(0, 8) : [],
             endpoint: parsed.knowledgeBase.endpoint ?? "",
             namespace: parsed.knowledgeBase.namespace ?? defaultKnowledgeBase.namespace,
@@ -2918,6 +2922,15 @@ function App() {
               <button type="button" className={!knowledgeBase.cloudEnabled ? "active" : ""} onClick={() => setKnowledgeBase((config) => ({ ...config, cloudEnabled: false }))}>本地</button>
               <button type="button" className={knowledgeBase.cloudEnabled ? "active" : ""} onClick={() => setKnowledgeBase((config) => ({ ...config, cloudEnabled: true }))}>云端增强</button>
             </div>
+            <label>
+              <input type="checkbox" checked={knowledgeBase.officialApiDocsEnabled !== false} onChange={(event) => setKnowledgeBase((config) => ({ ...config, officialApiDocsEnabled: event.target.checked }))} />
+              查询 SolidWorks 官方 API 文档
+            </label>
+            <label>
+              <input type="checkbox" checked={knowledgeBase.parallelApiFallbackEnabled !== false} disabled={knowledgeBase.officialApiDocsEnabled === false} onChange={(event) => setKnowledgeBase((config) => ({ ...config, parallelApiFallbackEnabled: event.target.checked }))} />
+              官网读取失败时使用免费 Parallel 备用查询
+            </label>
+            <p>仅发送版本、接口、方法名和官方链接；匿名服务有使用限制。关闭官方查询后仅使用本地资料。</p>
             {knowledgeBase.cloudEnabled ? (
               <div className="knowledge-fields">
                 <label>

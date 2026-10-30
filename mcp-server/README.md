@@ -30,7 +30,7 @@ python mcp-server\server.py
 
 ## 工具发现模式（默认）
 
-默认 `SW_MCP_DISCOVERY=search`：`tools/list` 只暴露三个发现入口，66 个原生工具可按需检索。
+默认 `SW_MCP_DISCOVERY=search`：`tools/list` 只暴露三个发现入口，67 个原生工具可按需检索。
 默认信任客户端已取得当前任务授权，任务内调用不再逐次请求服务端批准；需要更严格控制时
 可启用 `server` 模式。初始工具列表体积可通过
 `python -m pytest -q tests/test_mcp_discovery_quality.py` 验证。
@@ -43,7 +43,7 @@ python mcp-server\server.py
 
 直接点名调用被隐藏的原生工具同样会经过网关，未知工具一律拒绝。
 
-需要客户端逐工具展示权限提示时，用 `SW_MCP_DISCOVERY=full` 保留原来的 66 个命名工具。
+需要客户端逐工具展示权限提示时，用 `SW_MCP_DISCOVERY=full` 显示全部 67 个命名工具。
 两种模式共用同一套执行检查；`stdio` 和 `--transport streamable-http` 行为一致。
 
 ### 环境变量
@@ -53,6 +53,9 @@ python mcp-server\server.py
 | `SW_MCP_DISCOVERY` | `search` | `search` 发现模式；`full` 原生命名工具 |
 | `SW_MCP_APPROVAL` | `auto` | `auto`：发现模式用 `task`、完整模式用 `client`；`task`：信任客户端的任务授权，不逐次确认；`server`：本地逐次审批账本；`client`：交给客户端逐工具审批，仅允许完整模式；`elicit`：走 MCP elicitation（可能被 agent 自动应答）；`off`：关闭服务端审批 |
 | `SW_MCP_APPROVAL_DIR` | `%LOCALAPPDATA%\SolidWorksMCP\approvals` | 审批账本目录 |
+| `SW_API_LOOKUP_NETWORK` | `on` | 设置 `off` 禁止本项目 API 查证访问官方文档；不控制客户端自己的搜索 |
+
+`solidworks_lookup_api` 按目标年份和可选进程 ID 查本机类型库与 API Help，默认读取 SolidWorks 官方文档；直读失败且无缓存时使用匿名 Parallel 备用查询，仅发送公开版本、接口、成员及官方链接。传 `parallel_fallback=false` 禁用 Parallel，`offline=true` 禁用联网并允许使用历史缓存。结果区分版本证据、来源和获取时间，不能代替真机验证。多个目标无法确定时不会猜测或启动 SolidWorks。`solidworks_connect` 支持可选 `version` 年份并检查实际连接版本。
 
 ### 任务授权和可选逐次审批
 
@@ -119,7 +122,7 @@ python scripts\validate_mcp.py --mode search
 ```
 
 发现模式校验会确认 3 个入口可见、每个必需工具都能按名称检索并读到 Schema；完整模式校验
-66 个工具全部可见。
+67 个工具全部可见。
 
 ## HTTP 传输（streamable-http）
 
@@ -171,7 +174,7 @@ python mcp-server\server.py --transport streamable-http --host 0.0.0.0 --port 80
 - 读取适配复用既有 Artifact Ledger；文件改变、目录越界或任意路径参数均不能作为已验证产物读取。
 
 远端输入仍需预先放到 CAD 主机；产物读取接口只服务已有交付文件。
-工具**当前共 66 个**：原有工具的名称与输入 Schema 保持不变，另含 5 个受保护的原生圆截面路径工具（见文末）。发现模式下这些工具不出现在 `tools/list` 中，但检索、Schema 读取和执行行为与完整模式一致。
+工具**当前共 67 个**：保留原有命名工具，新增按版本查证 API 的只读工具；原有连接工具增加了可选的目标版本参数。发现模式下这些工具不出现在 `tools/list` 中，但检索、Schema 读取和执行行为与完整模式一致。
 
 ## Smithery 发布
 
@@ -186,7 +189,7 @@ smithery mcp publish .\dist\solidworks-automation-skill-1.3.0-smithery.mcpb `
   -n wzyn20051216/solidworks-automation-skill
 ```
 
-Smithery 当前发布接口要求工具卡包含 `inputSchema`，而 MCPB 0.4 的静态 `tools` 项不允许该字段，因此发布包由脚本从 MCP Server 注册表自动生成，避免手工维护两套 schema。工具卡来自完整注册表（69 项：66 个原生工具 + 3 个发现入口），与运行时 `SW_MCP_DISCOVERY` 的选择无关。
+Smithery 当前发布接口要求工具卡包含 `inputSchema`，而 MCPB 0.4 的静态 `tools` 项不允许该字段，因此发布包由脚本从 MCP Server 注册表自动生成，避免手工维护两套 schema。工具卡来自完整注册表（70 项：67 个原生工具 + 3 个发现入口），与运行时 `SW_MCP_DISCOVERY` 的选择无关。
 
 ## 多客户端自动注册
 
@@ -269,6 +272,7 @@ claude mcp add --scope user solidworks -- python C:\path\to\solidworks-automatio
 | `cadstudio_check_routing` | 校验中性 Routing 端点、分段、长度、弯曲半径、碰撞/间隙、支撑和 Routing BOM | 否 |
 | `cadstudio_routing_preflight` | 探测 SOLIDWORKS Routing 类型库、加载项注册和许可证证据；缺证据返回 blocked | 否 |
 | `solidworks_addin_host_status` | 只读检查 C# Add-in 程序集、HKCU/HKLM 注册层级、进程内 UI/事件诊断和阻塞码 | 否 |
+| `solidworks_lookup_api` | 按目标版本查证本地类型库和可选官方 API 文档，不启动或修改 CAD | 否，默认访问官方文档 |
 | `cadstudio_fea_preflight` | 探测 CalculiX/Elmer 求解器，不执行任意命令 | 否 |
 | `cadstudio_prepare_fea` | 从 FEA 1.0/1.1 请求生成版本化 CalculiX `.inp`，不运行任意脚本 | 否 |
 | `cadstudio_run_fea` | 运行白名单 CalculiX 线性或受限非线性静力任务并解析位移、应力和收敛证据 | 否 |
