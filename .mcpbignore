@@ -1,6 +1,12 @@
 .github/
 __pycache__/
 .pytest_cache/
+HANDOFF.md
+.env
+.env.*
+*.private.pem
+.ed25519-private.pem
+.cad-governance/
 .venv/
 venv/
 dist/

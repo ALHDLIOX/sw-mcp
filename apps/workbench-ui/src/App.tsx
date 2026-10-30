@@ -296,6 +296,8 @@ const wallpaperMotionLabels: Record<WallpaperMotionMode, string> = {
 };
 const defaultKnowledgeBase: KnowledgeBaseConfig = {
   cloudEnabled: false,
+  officialApiDocsEnabled: true,
+  parallelApiFallbackEnabled: true,
   localRoots: [],
   endpoint: "",
   namespace: "mechanical-engineering",
@@ -521,6 +523,8 @@ function loadSettings(payload?: unknown): AppSettings | null {
       knowledgeBase: parsed.knowledgeBase
         ? {
             cloudEnabled: parsed.knowledgeBase.cloudEnabled === true,
+            officialApiDocsEnabled: parsed.knowledgeBase.officialApiDocsEnabled === undefined || parsed.knowledgeBase.officialApiDocsEnabled === true,
+            parallelApiFallbackEnabled: parsed.knowledgeBase.parallelApiFallbackEnabled === undefined || parsed.knowledgeBase.parallelApiFallbackEnabled === true,
             localRoots: Array.isArray(parsed.knowledgeBase.localRoots) ? parsed.knowledgeBase.localRoots.filter((item): item is string => typeof item === "string").slice(0, 8) : [],
             endpoint: parsed.knowledgeBase.endpoint ?? "",
             namespace: parsed.knowledgeBase.namespace ?? defaultKnowledgeBase.namespace,
@@ -898,6 +902,7 @@ function App() {
   const [manualReviewDrafts, setManualReviewDrafts] = useState<Record<string, ManualReviewDraft>>({});
   const [workerStatus, setWorkerStatus] = useState<WorkerStatus>({ running: false, message: "桌面端可启动" });
   const [workerAction, setWorkerAction] = useState<"start" | "stop" | "restart" | null>(null);
+  const workerStartingRef = useRef(false);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [submissionKind, setSubmissionKind] = useState<SubmissionKind>(null);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<string | null>(null);
@@ -1148,7 +1153,10 @@ function App() {
       setWorkerStatus({ running: false, message: "请在桌面端启动 worker" });
       return;
     }
+    if (workerStartingRef.current) return;
+    workerStartingRef.current = true;
     setWorkerAction("start");
+    setWorkerStatus({ running: false, message: "正在检测并配置本地环境，首次启动可能需要几分钟。" });
     try {
       const status = await invoke<WorkerStatus>("start_worker", {
         repoPath: runtimeHealth?.skillRoot ?? "",
@@ -1159,7 +1167,8 @@ function App() {
     } catch (error) {
       setWorkerStatus({ running: false, message: `worker 启动失败: ${String(error)}` });
     } finally {
-      setWorkerAction(null);
+      workerStartingRef.current = false;
+      setWorkerAction((current) => current === "start" ? null : current);
     }
   }
 
@@ -1181,7 +1190,10 @@ function App() {
       setWorkerStatus({ running: false, message: "请在桌面端重启 worker" });
       return;
     }
+    if (workerStartingRef.current) return;
+    workerStartingRef.current = true;
     setWorkerAction("restart");
+    setWorkerStatus({ running: false, message: "正在重启执行器并检查本地环境。" });
     try {
       const stopped = await invoke<WorkerStatus>("stop_worker");
       const status = await invoke<WorkerStatus>("start_worker", {
@@ -1197,6 +1209,7 @@ function App() {
     } catch (error) {
       setWorkerStatus({ running: false, message: `worker 重启失败: ${String(error)}` });
     } finally {
+      workerStartingRef.current = false;
       setWorkerAction(null);
     }
   }
@@ -2895,8 +2908,8 @@ function App() {
             <span>本地执行</span>
             <strong>{workerStatus.running ? `运行中 · PID ${workerStatus.pid ?? "-"}` : "未启动"}</strong>
             <p>{workerStatus.health?.heartbeatAt ? `最近心跳 ${workerStatus.health.heartbeatAt}` : runtimeMessage}</p>
-            <button type="button" onClick={() => void (workerStatus.running ? stopLocalWorker() : startLocalWorker())}>
-              {workerStatus.running ? "停止本地执行器" : "启动本地执行器"}
+            <button type="button" disabled={workerAction !== null && workerAction !== "start"} onClick={() => void (workerAction === "start" || workerStatus.running ? stopLocalWorker() : startLocalWorker())}>
+              {workerAction === "start" ? "取消启动" : workerStatus.running ? "停止本地执行器" : "启动本地执行器"}
             </button>
           </article>
           <article className="setting-card status-setting amber">
@@ -2918,6 +2931,15 @@ function App() {
               <button type="button" className={!knowledgeBase.cloudEnabled ? "active" : ""} onClick={() => setKnowledgeBase((config) => ({ ...config, cloudEnabled: false }))}>本地</button>
               <button type="button" className={knowledgeBase.cloudEnabled ? "active" : ""} onClick={() => setKnowledgeBase((config) => ({ ...config, cloudEnabled: true }))}>云端增强</button>
             </div>
+            <label>
+              <input type="checkbox" checked={knowledgeBase.officialApiDocsEnabled !== false} onChange={(event) => setKnowledgeBase((config) => ({ ...config, officialApiDocsEnabled: event.target.checked }))} />
+              查询 SolidWorks 官方 API 文档
+            </label>
+            <label>
+              <input type="checkbox" checked={knowledgeBase.parallelApiFallbackEnabled !== false} disabled={knowledgeBase.officialApiDocsEnabled === false} onChange={(event) => setKnowledgeBase((config) => ({ ...config, parallelApiFallbackEnabled: event.target.checked }))} />
+              官网读取失败时使用免费 Parallel 备用查询
+            </label>
+            <p>仅发送版本、接口、方法名和官方链接；匿名服务有使用限制。关闭官方查询后仅使用本地资料。</p>
             {knowledgeBase.cloudEnabled ? (
               <div className="knowledge-fields">
                 <label>
@@ -3739,8 +3761,8 @@ function App() {
                       {workerAction === "restart" ? "重启中" : "重启执行器"}
                     </button>
                   ) : null}
-                  <button type="button" disabled={workerAction !== null} onClick={() => void (workerStatus.running ? stopLocalWorker() : startLocalWorker())}>
-                    {workerAction === "start" ? "启动中" : workerAction === "stop" ? "停止中" : workerStatus.running ? "停止" : "启动"}
+                  <button type="button" disabled={workerAction !== null && workerAction !== "start"} onClick={() => void (workerAction === "start" || workerStatus.running ? stopLocalWorker() : startLocalWorker())}>
+                    {workerAction === "start" ? "取消启动" : workerAction === "stop" ? "停止中" : workerStatus.running ? "停止" : "启动"}
                   </button>
                   <span>{queueLoaded ? queueSummary : "加载中"}</span>
                 </div>

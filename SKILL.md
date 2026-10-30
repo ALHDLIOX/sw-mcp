@@ -44,9 +44,8 @@ python SKILL_DIR/scripts/cad_studio.py doctor
 
 规则：
 
-1. 检测到缺少 `comtypes` / `win32com` / `pythoncom` 时，向用户弹出友好确认：
-   `检测到当前 Python 环境缺少 comtypes / win32com 库，是否授权 AI 自动为您配置本地环境？[Y/N]`
-2. 用户输入 `Y` / `yes` 后，代理可在本地 shell 中自动执行 `python -m pip install "pywin32>=305" "comtypes>=1.2.0"` 补齐依赖；用户拒绝时停止并给出手动安装命令。
+1. 检测到缺少 `comtypes` / `win32com` / `pythoncom` 时，默认执行 `python -m pip install "pywin32>=305" "comtypes>=1.2.0"` 补齐依赖；安装失败时说明原因和手动方法。
+2. 环境变量 `SW_AUTO_INSTALL_DEPENDENCIES=off` 或 `sw_preflight.py --no-install` 可关闭自动安装。
 3. 检测不到 SolidWorks 安装或 COM 注册时，停止原生 SolidWorks 操作；若原生格式并非必需且 `fallbackPolicy=allow_open_formats`，继续执行无头开放格式后端，不要把整个任务误标为失败。
 
 ### Python 依赖提醒
@@ -131,7 +130,7 @@ with SolidWorksSession(version=2026) as session:
 | 复杂曲面与模具 | `scripts/advanced_geometry.py`、`scripts/advanced_geometry_ocp.py`、`scripts/advanced_surface_ocp.py`、`scripts/cad_studio.py review-advanced-geometry/create-ocp-loft/create-ocp-surface` | 直纹/平滑 Loft、受限 Sweep/Knit/Thicken 可写并重开 B-Rep；G1/G2 和曲率半径只返回离散采样证据 |
 | 本地 MCP Server | `mcp-server/server.py` | `mcp-server/README.md`、`references/mcp-server.md` |
 | MCP 协议验证 | `scripts/validate_mcp.py` | `mcp-server/README.md` |
-| 未封装 API 查证 | - | `references/api-lookup.md` |
+| 版本化 API 查证 | `scripts/sw_api_lookup.py` | `references/api-lookup.md` |
 | OpenClaw 控制 SolidWorks | - | `references/openclaw.md` |
 | 钣金/焊件/仿真/属性 | - | `references/advanced.md` |
 | 企业 Agent / 本地优先与云 RAG | `apps/desktop/cad_workbench/knowledge_retrieval.py` | `references/enterprise-agent-rag.md` |
@@ -161,7 +160,7 @@ from sw_connect import connect_solidworks, mm, deg, new_document
 
 1. 先根据原子操作运行 `backend_router.py`，再结合 `preferredBackend`、`requiredOutputs`、`nativeFormatRequired` 和 `fallbackPolicy` 判定后端；不要先假定 Python、C# 或 SolidWorks 必然可用。普通任务优先 Automation 等价接口，明确要求仅非托管 C++ 支持的原始 `I*` 指针语义时才升级到原生 C++。
    事件订阅、PropertyManagerPage、TaskPane 或长期驻留 UI 走 `solidworks_addin_ui_events` 路由，优先 C# Add-in；必须检查 HKLM 注册、64 位 TLB 注册和 `host-status.json`，不能只凭 `LoadAddIn=0` 宣称成功。SW2026 的 PMP Handler 必须公开、COM 可见并提供 `IDispatch` class interface。
-2. 需要原生 SolidWorks 格式时运行 `sw_preflight.py`；缺依赖则请求用户授权自动安装，缺 SolidWorks 则只阻断原生阶段。
+2. 需要原生 SolidWorks 格式时运行 `sw_preflight.py`；缺依赖默认自动安装，缺 SolidWorks 则只阻断原生阶段。
 3. 不需要原生格式或允许开放格式回退时，运行 `python scripts/cad_studio.py write-open-format --input model.cadstudio.json --out-dir output`。
 4. 需要制造性快速复核时，运行 `python scripts/cad_studio.py check-dfm --input model.cadstudio.json --output output/dfm_report.json --process machining`；支持 `--profile supplier.json` 和 `--brep-evidence brep.json`。报告缺少材料、壁厚、K 因子、割缝、成型空间或要求的 B-Rep 证据时返回 `blocked`，规则通过也必须人工复核。
 5. 原生 SolidWorks 路线优先用 `SolidWorksSession()` 管理连接、打开、新建、保存、导出；需要底层控制时再组合 `sw_connect.py`、`sw_part.py` 等函数。
@@ -226,11 +225,18 @@ from sw_connect import connect_solidworks, mm, deg, new_document
 
 1. 读取 `mcp-server/README.md`。
 2. 若用户要求自动配置 MCP，优先运行多客户端注册器：`powershell -ExecutionPolicy Bypass -File mcp-server/register_all_ai_mcp.ps1 -InstallDependencies`；它会尝试注册 Codex、Claude Code、Claude Desktop、Cursor、Windsurf。
-3. 使用本地 `stdio` MCP server：`python mcp-server/server.py`。
-4. 无 CAD 开放格式写入优先调用 `cadstudio_write_open_format`；DFM、Routing、FEA 和复杂几何分别调用 `cadstudio_check_dfm`、`cadstudio_check_routing`、`cadstudio_routing_preflight`、`cadstudio_fea_preflight`、`cadstudio_prepare_fea`、`cadstudio_run_fea`、`cadstudio_run_fea_convergence`、`cadstudio_review_advanced_geometry`、`cadstudio_create_ocp_loft`、`cadstudio_create_ocp_surface`；SolidWorks 原生操作再调用白名单 `solidworks_*` 工具。
-5. 不要暴露任意 Python/VBA 执行工具；新增 MCP 工具时应复用 `scripts/sw_*.py` 中已验证封装。
-6. SolidWorks COM 操作必须串行执行；MCP server 内部已使用全局锁降低桌面会话冲突。
-7. 基准 demo 使用 `examples/08_mini_fan_motion_assembly.py`；它验证自动建模、装配、Mate 和 Motion Study，不承诺圆角/倒角外观完美。
+3. 使用本地 `stdio` MCP server：`python mcp-server/server.py`；默认是发现模式（`SW_MCP_DISCOVERY=search`），只暴露 `sw_search_tools` / `sw_describe_tool` / `sw_call_tool`。需要全部命名工具时设 `SW_MCP_DISCOVERY=full`。
+4. 发现模式按「检索 → 读 Schema → 执行」使用：先 `sw_search_tools` 用中英文说法找候选，再 `sw_describe_tool` 确认参数，最后 `sw_call_tool`。不要凭猜测直接调用工具名。
+5. 默认发现模式信任客户端已经取得当前任务的授权；在用户授权范围内执行建模，不要逐项
+   要求额外批准。涉及用户未授权的覆盖、关闭或其他高风险操作时仍须取得明确授权。
+   可为已保存文档的活动文档写操作提供 `document_target`（绝对 `path` 和 SolidWorks
+   `process_id`），以校验目标；未提供时使用工具原有的活动文档行为。
+   如用户显式启用 `server` 逐次审批，工具返回请求 ID 时请用户在服务端运行
+   `python scripts/sw_mcp_approve.py approve <请求ID>`；目标无法核验时停止并说明限制。
+6. 无 CAD 开放格式写入优先调用 `cadstudio_write_open_format`；DFM、Routing、FEA 和复杂几何分别调用 `cadstudio_check_dfm`、`cadstudio_check_routing`、`cadstudio_routing_preflight`、`cadstudio_fea_preflight`、`cadstudio_prepare_fea`、`cadstudio_run_fea`、`cadstudio_run_fea_convergence`、`cadstudio_review_advanced_geometry`、`cadstudio_create_ocp_loft`、`cadstudio_create_ocp_surface`；SolidWorks 原生操作再调用白名单 `solidworks_*` 工具。
+7. 不要暴露任意 Python/VBA 执行工具；新增 MCP 工具时应复用 `scripts/sw_*.py` 中已验证封装。
+8. SolidWorks COM 操作必须串行执行；MCP server 内部已使用全局锁降低桌面会话冲突。
+9. 基准 demo 使用 `examples/08_mini_fan_motion_assembly.py`；它验证自动建模、装配、Mate 和 Motion Study，不承诺圆角/倒角外观完美。
 
 ### 运动装配体要求
 
@@ -269,11 +275,15 @@ assert result.ok, result.issues
 
 当任务需要调用 `scripts/` 中尚未封装的 SolidWorks API 时：
 
-1. 先读取 `references/api-lookup.md`，再查询 SolidWorks 官方 API 文档，或本地 SolidWorks SDK / 参考资料，确认方法签名、参数含义、枚举值、返回值和版本差异。
+1. 先读取 `references/api-lookup.md`，使用 `python SKILL_DIR/scripts/sw_api_lookup.py 接口 方法` 查询目标版本的本地类型库与官方文档；已知目标年份时加 `--version 2024`，多实例时加 `--process-id`。确认签名、单位、前提和版本差异。
 2. 禁止凭记忆猜接口；尤其是长参数 COM 方法、`VARIANT` / by-ref 参数、枚举值、选择标记和 `SaveAs` 类接口。
 3. 写代码时保留最小可运行脚本，并对每一步返回值做 `None` / `False` 检查。
 4. 实现后必须真实运行，保存或导出目标文件，并使用 `sw_review.py` 生成预览图与审查报告。
 5. 新发现的坑、错误码、兼容写法或稳定封装，要补充到 `references/troubleshooting.md` 或对应模块参考文档；常用逻辑再沉淀进 `scripts/`。
+
+查证默认可访问 SolidWorks 官方文档，官网直读失败且没有缓存时使用匿名 Parallel 备用查询；仅发送公开版本、接口、成员及官方链接。`--offline` 或 `SW_API_LOOKUP_NETWORK=off` 禁止本工具联网，`--no-parallel` 或 `SW_API_LOOKUP_PARALLEL=off` 单独关闭 Parallel。离线可用本机帮助及上次获取的缓存，须留意版本证据和获取时间。文档不足时可在客户端允许的范围内使用其自带搜索，仅搜索公开 API 标识；客户端自己的联网权限由客户端控制。接口声明、官方说明和真机行为分别判断，缺少目标版本或运行验证时不得声称已验证兼容。
+
+自然语言任务未指明 API 时，先运行 `python SKILL_DIR/scripts/sw_api_lookup.py --task "任务描述"` 自动查证常见候选；候选不是强制方案。无候选或规划中确定其他 API 时，先从现有封装确定接口与成员，再逐项查询对应版本，不要把任务全文发给第三方服务。
 
 ## 结果自审查
 
@@ -304,7 +314,7 @@ print(report["evaluation"])
 ## 关键注意事项
 
 - **单位**：API 统一使用**米**。用 `mm(50)` 转换 50mm 为 0.05m，用 `deg(90)` 转换角度
-- **版本**：使用 `SldWorks.Application` 自动连接，兼容所有版本
+- **版本**：可指定 SolidWorks 年份并核对目标实例；不同操作的兼容性以 `capabilities.yaml` 和实际版本证据为准，不能将连接成功视为所有功能兼容
 - **选择**：能拿到 COM 对象时优先用对象级 `Select2()`；基准面可用 `SelectByID2("PLANE")`，草图不要只依赖 `SelectByID2("SKETCH")`
 - **草图**：推荐用 `with sketch(model, "Front Plane") as sketch_name:` 自动进入/退出草图；`sw_part.py` 会缓存草图对象引用，避免 SW2024 中文版按名称选择草图失败
 - **添加组件**：装配体优先用 `sw_assembly.add_component()`；SW2024 中文版下 `AddComponent4` 可能返回 `None`，封装会用 `AddComponent5`、静默打开零件、重新激活装配体后重试
