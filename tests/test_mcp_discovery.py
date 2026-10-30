@@ -84,6 +84,23 @@ def test_health_check_start_request_is_not_classified_as_read_only():
     assert policy.classify("solidworks_connect")[0] is policy.Effect.WRITE
 
 
+def test_api_lookup_accurately_classifies_optional_installation():
+    assert policy.classify("solidworks_lookup_api")[0] is policy.Effect.WRITE
+    assert policy.classify("solidworks_lookup_api", {"params": {"offline": True}})[0] is policy.Effect.READ
+    assert policy.classify("solidworks_lookup_api", {"params": {"auto_install": False}})[0] is policy.Effect.READ
+    assert policy.classify("solidworks_lookup_api", {"params": {"auto_install": "false"}})[0] is policy.Effect.WRITE
+
+
+def test_api_lookup_input_requires_exactly_one_request_form():
+    import server
+    from pydantic import ValidationError
+    assert server.SolidWorksApiLookupInput(task="画圆").task == "画圆"
+    assert server.SolidWorksApiLookupInput(interface="ISketchManager", member="CreateCircleByRadius").member
+    for value in ({}, {"interface": "ISketchManager"}, {"task": "画圆", "interface": "ITest", "member": "Method"}):
+        with pytest.raises(ValidationError):
+            server.SolidWorksApiLookupInput(**value)
+
+
 def test_connect_forwards_optional_target_version(monkeypatch):
     import server
     calls = []
@@ -454,6 +471,44 @@ def test_stdio_versioned_api_lookup_is_discoverable_and_offline(tmp_path):
         assert value["interface"] == "ISketchManager" and value["official"] is None
         assert value["runtime_verified"] is False
     asyncio.run(_with_session(_stdio_env(tmp_path, "search"), handler))
+
+
+def test_stdio_natural_language_api_lookup_offline(tmp_path):
+    async def handler(session):
+        called = await session.call_tool("sw_call_tool", {
+            "name": "solidworks_lookup_api", "arguments": {"params": {
+                "task": "SolidWorks 2026 画圆并拉伸", "offline": True}},
+        })
+        assert not called.isError
+        result = json.loads(called.content[0].text)
+        assert result["status"] == "candidates"
+        assert [(item["interface"], item["member"]) for item in result["results"]] == [
+            ("ISketchManager", "CreateCircleByRadius"), ("IFeatureManager", "FeatureExtrusion3")]
+    asyncio.run(_with_session(_stdio_env(tmp_path, "search"), handler))
+
+
+def test_stdio_auto_install_respects_explicit_server_approval_mode(tmp_path):
+    async def handler(session):
+        called = await session.call_tool("sw_call_tool", {
+            "name": "solidworks_lookup_api", "arguments": {"params": {
+                "task": "SolidWorks 2026 画圆", "auto_install": True}},
+        })
+        assert called.isError
+        assert "需要人工批准" in called.content[0].text
+    asyncio.run(_with_session(_stdio_env(tmp_path, "search"), handler))
+
+
+def test_stdio_auto_install_uses_default_task_authorization(tmp_path):
+    async def handler(session):
+        called = await session.call_tool("sw_call_tool", {
+            "name": "solidworks_lookup_api", "arguments": {"params": {
+                "task": "没有可识别的建模操作", "auto_install": True}},
+        })
+        assert not called.isError
+        assert json.loads(called.content[0].text)["status"] == "no_candidate"
+    config = _stdio_env(tmp_path, "search")
+    config["SW_MCP_APPROVAL"] = "auto"
+    asyncio.run(_with_session(config, handler))
 
 
 def test_stdio_hidden_tools_are_still_checked_when_called_by_name(tmp_path):

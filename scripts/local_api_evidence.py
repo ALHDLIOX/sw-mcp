@@ -14,10 +14,18 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
+try:
+    from .api_environment import ensure_sevenzip
+    from .api_help_restore import _registered_source, restore_local_help
+except ImportError:
+    from api_environment import ensure_sevenzip
+    from api_help_restore import _registered_source, restore_local_help
+
 
 def _find_sevenzip() -> str | None:
     """优先使用 PATH；Windows 上也接受 7-Zip 安装程序登记的目录。"""
-    executable = shutil.which("7z") or shutil.which("7za")
+    # 7za 的独立版本不支持 CHM；必须使用带完整格式库的 7z。
+    executable = shutil.which("7z")
     if executable:
         return executable
     if os.name != "nt":
@@ -136,7 +144,9 @@ class _TitleText(HTMLParser):
         elif not self.hidden: self.text.append(data)
 
 
-def read_local_help(executable: Path, version: int, interface: str, member: str, url: str) -> dict[str, Any] | None:
+def read_local_help(executable: Path, version: int, interface: str, member: str, url: str, *,
+                    allow_install: bool = False, warnings: list[str] | None = None,
+                    cancelled: Any = None) -> dict[str, Any] | None:
     """只读取已识别安装目录的 API CHM，7-Zip 缺失时安全跳过。
 
     文件归属安装不保证其内部版本，结果必须标为未独立确认版本。
@@ -145,9 +155,29 @@ def read_local_help(executable: Path, version: int, interface: str, member: str,
     primary = "swconst.chm" if interface.casefold().startswith("sw") else "sldworksapi.chm"
     candidates = [install / "api" / primary, install / "api" / "apihelp.chm", install / "lang" / "apihelp.chm"]
     archive = next((path for path in candidates if path.is_file()), None)
+    restoring = archive is None
+    if restoring:
+        # Authenticode 信任链检查可能访问证书状态服务；离线模式不运行安装源验证。
+        if not allow_install:
+            if warnings is not None: warnings.append("未发现本地 API Help；离线或自动配置关闭时不验证和恢复安装源。")
+            return None
+        if os.environ.get("SW_API_LOOKUP_AUTO_INSTALL", "on").strip().lower() in {"off", "false", "0"}:
+            if warnings is not None: warnings.append("未发现本地 API Help，自动恢复已关闭。")
+            return None
+        if _registered_source(executable, version) is None:
+            if warnings is not None: warnings.append("未发现目标安装的本地 API Help 或匹配的本地安装源，将继续使用其他资料。")
+            return None
     sevenzip = _find_sevenzip()
-    if archive is None or not sevenzip:
+    if not sevenzip:
+        sevenzip, error = ensure_sevenzip(allow_network=allow_install, cancelled=cancelled)
+        if error and warnings is not None:
+            warnings.append(error)
+    if not sevenzip:
         return None
+    if restoring:
+        archive, error = restore_local_help(executable, version, primary, sevenzip, cancelled=cancelled)
+        if error and warnings is not None: warnings.append(error)
+        if archive is None: return None
     basename = Path(unquote(urlsplit(url).path)).name
     try:
         with tempfile.TemporaryFile() as output:
@@ -186,6 +216,7 @@ def read_local_help(executable: Path, version: int, interface: str, member: str,
         return {"status": "found", "source": str(archive), "version": version, "title": title,
                 "text": text, "sha256": hashlib.sha256(text.encode()).hexdigest(),
                 "retrieved_at": datetime.now(timezone.utc).isoformat(), "provider": "local-help",
-                "version_evidence": "installation_directory_only", "trust": "untrusted_reference", "runtime_verified": False}
+                "version_evidence": "signed_installer_product_and_file_hash" if restoring else "installation_directory_only",
+                "trust": "untrusted_reference", "runtime_verified": False}
     except (OSError, subprocess.SubprocessError, ValueError):
         return None

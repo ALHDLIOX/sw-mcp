@@ -90,14 +90,15 @@ npx github:wzyn20051216/solidworks-automation-skill --target claude
 - 目标目录已存在但**不是本仓库的 git 检出**（手动放置、解压、或其他来源）时，
   **拒绝安装且不删除任何文件**。
 - 由本仓库安装的目录用 `git pull --ff-only` 更新；无法快进时**只报告，不删除**。
-- Python 依赖默认**不自动安装**，只打印命令；加 `--install-deps` 才执行。
+- 默认自动安装 Python 依赖；Windows 上没有 Python 3.10+ 时尝试使用 winget 为当前用户安装 Python 3.12。失败时给出提示；`--no-install-deps` 可关闭此行为。
 - 非 Windows 平台默认拒绝（SolidWorks COM 不可用）；确需使用开放格式能力加 `--allow-non-windows`。
 
 | 参数 | 作用 |
 |---|---|
 | `--target claude,codex` | 装到指定客户端；`all` 表示全部支持项 |
 | `--dry-run` | 只打印将要执行的动作，不写盘 |
-| `--install-deps` | 安装 `requirements.txt` + `mcp-server/requirements.txt` |
+| `--install-deps` | 安装 `requirements.txt` + `mcp-server/requirements.txt`（默认） |
+| `--no-install-deps` | 不自动安装 Python 和 Python 依赖 |
 | `--no-register-mcp` | 跳过 MCP 配置注册（默认注册，覆盖前自动备份 `.bak-<时间戳>`） |
 | `--force-reinstall` | 旧目录先改名为 `.bak-<时间戳>` 再重装（**不删除**） |
 
@@ -120,6 +121,8 @@ node mcp-server/register_all_ai_mcp.js --clients codex,claude-code,cursor
 ### Option 3 — CAD Studio 桌面版
 
 从 [GitHub Releases](https://github.com/wzyn20051216/solidworks-automation-skill/releases) 下载 Windows 安装包。
+
+桌面端启动本地执行器时，如果 Windows 没有可用的 Python 3.10+，会尝试通过 winget 为当前用户安装 Python 3.12；无法安装时显示错误。环境诊断仍只读。SolidWorks 必须由用户另行安装并具备许可；API 查证所需的 7-Zip、Python 包和可验证的本地 API Help 按需自动配置，详情见 [`references/api-lookup.md`](references/api-lookup.md)。
 
 > **Choose one entry point. You do not need to run all three.**
 

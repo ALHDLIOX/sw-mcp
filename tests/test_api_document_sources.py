@@ -122,6 +122,17 @@ def test_find_sevenzip_in_registered_install_without_path(monkeypatch, tmp_path)
     assert local._find_sevenzip() == str(executable)
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows 7-Zip registry discovery")
+def test_standalone_7za_is_not_treated_as_chm_reader(monkeypatch):
+    registry = SimpleNamespace(HKEY_CURRENT_USER=1, HKEY_LOCAL_MACHINE=2, KEY_WOW64_64KEY=4,
+        KEY_WOW64_32KEY=8, KEY_READ=16)
+    def missing(*args): raise OSError("not installed")
+    registry.OpenKey = missing
+    monkeypatch.setitem(sys.modules, "winreg", registry)
+    monkeypatch.setattr(local.shutil, "which", lambda name: "7za.exe" if name == "7za" else None)
+    assert local._find_sevenzip() is None
+
+
 def test_local_help_accepts_legacy_topic_name(monkeypatch, tmp_path):
     exe = tmp_path / "SLDWORKS.exe"
     archive = tmp_path / "api" / "apihelp.chm"

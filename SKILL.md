@@ -44,9 +44,8 @@ python SKILL_DIR/scripts/cad_studio.py doctor
 
 规则：
 
-1. 检测到缺少 `comtypes` / `win32com` / `pythoncom` 时，向用户弹出友好确认：
-   `检测到当前 Python 环境缺少 comtypes / win32com 库，是否授权 AI 自动为您配置本地环境？[Y/N]`
-2. 用户输入 `Y` / `yes` 后，代理可在本地 shell 中自动执行 `python -m pip install "pywin32>=305" "comtypes>=1.2.0"` 补齐依赖；用户拒绝时停止并给出手动安装命令。
+1. 检测到缺少 `comtypes` / `win32com` / `pythoncom` 时，默认执行 `python -m pip install "pywin32>=305" "comtypes>=1.2.0"` 补齐依赖；安装失败时说明原因和手动方法。
+2. 环境变量 `SW_AUTO_INSTALL_DEPENDENCIES=off` 或 `sw_preflight.py --no-install` 可关闭自动安装。
 3. 检测不到 SolidWorks 安装或 COM 注册时，停止原生 SolidWorks 操作；若原生格式并非必需且 `fallbackPolicy=allow_open_formats`，继续执行无头开放格式后端，不要把整个任务误标为失败。
 
 ### Python 依赖提醒
@@ -161,7 +160,7 @@ from sw_connect import connect_solidworks, mm, deg, new_document
 
 1. 先根据原子操作运行 `backend_router.py`，再结合 `preferredBackend`、`requiredOutputs`、`nativeFormatRequired` 和 `fallbackPolicy` 判定后端；不要先假定 Python、C# 或 SolidWorks 必然可用。普通任务优先 Automation 等价接口，明确要求仅非托管 C++ 支持的原始 `I*` 指针语义时才升级到原生 C++。
    事件订阅、PropertyManagerPage、TaskPane 或长期驻留 UI 走 `solidworks_addin_ui_events` 路由，优先 C# Add-in；必须检查 HKLM 注册、64 位 TLB 注册和 `host-status.json`，不能只凭 `LoadAddIn=0` 宣称成功。SW2026 的 PMP Handler 必须公开、COM 可见并提供 `IDispatch` class interface。
-2. 需要原生 SolidWorks 格式时运行 `sw_preflight.py`；缺依赖则请求用户授权自动安装，缺 SolidWorks 则只阻断原生阶段。
+2. 需要原生 SolidWorks 格式时运行 `sw_preflight.py`；缺依赖默认自动安装，缺 SolidWorks 则只阻断原生阶段。
 3. 不需要原生格式或允许开放格式回退时，运行 `python scripts/cad_studio.py write-open-format --input model.cadstudio.json --out-dir output`。
 4. 需要制造性快速复核时，运行 `python scripts/cad_studio.py check-dfm --input model.cadstudio.json --output output/dfm_report.json --process machining`；支持 `--profile supplier.json` 和 `--brep-evidence brep.json`。报告缺少材料、壁厚、K 因子、割缝、成型空间或要求的 B-Rep 证据时返回 `blocked`，规则通过也必须人工复核。
 5. 原生 SolidWorks 路线优先用 `SolidWorksSession()` 管理连接、打开、新建、保存、导出；需要底层控制时再组合 `sw_connect.py`、`sw_part.py` 等函数。
@@ -277,6 +276,8 @@ assert result.ok, result.issues
 5. 新发现的坑、错误码、兼容写法或稳定封装，要补充到 `references/troubleshooting.md` 或对应模块参考文档；常用逻辑再沉淀进 `scripts/`。
 
 查证默认可访问 SolidWorks 官方文档，官网直读失败且没有缓存时使用匿名 Parallel 备用查询；仅发送公开版本、接口、成员及官方链接。`--offline` 或 `SW_API_LOOKUP_NETWORK=off` 禁止本工具联网，`--no-parallel` 或 `SW_API_LOOKUP_PARALLEL=off` 单独关闭 Parallel。离线可用本机帮助及上次获取的缓存，须留意版本证据和获取时间。文档不足时可在客户端允许的范围内使用其自带搜索，仅搜索公开 API 标识；客户端自己的联网权限由客户端控制。接口声明、官方说明和真机行为分别判断，缺少目标版本或运行验证时不得声称已验证兼容。
+
+自然语言任务未指明 API 时，先运行 `python SKILL_DIR/scripts/sw_api_lookup.py --task "任务描述"` 自动查证常见候选；候选不是强制方案。无候选或规划中确定其他 API 时，先从现有封装确定接口与成员，再逐项查询对应版本，不要把任务全文发给第三方服务。
 
 ## 结果自审查
 

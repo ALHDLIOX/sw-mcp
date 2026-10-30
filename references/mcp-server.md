@@ -32,7 +32,7 @@ SolidWorks 是 Windows 桌面 COM 应用，不是原生 MCP 服务。MCP Server 
 `sw_call_tool`），67 个原生命名工具按需检索。`SW_MCP_DISCOVERY=full` 保留全部命名工具，
 用于需要客户端逐工具权限提示的场景。
 
-使用 `sw_search_tools` 搜索“API 接口签名”，再调用 `solidworks_lookup_api`；参数为 `interface`、`member`、可选 `version` / `process_id`、默认 `false` 的 `offline` 和默认 `true` 的 `parallel_fallback`。官网直读失败且本地无缓存时，默认使用匿名 Parallel 提取对应版本的官方页面，使用 `parallel_fallback=false` 关闭。设置 `offline=true` 或 `SW_API_LOOKUP_NETWORK=off` 不联网，仍可使用本机帮助及历史缓存。Parallel 的版本依据弱于官网结构化数据；所有结果都不能代替目标版本的真机验证。详情见 `references/api-lookup.md`。
+使用 `sw_search_tools` 搜索“API 接口签名”，再调用 `solidworks_lookup_api`；提供 `interface` 和 `member`，或改为提供自然语言 `task`，可选 `version` / `process_id`。默认按需自动配置依赖，因此工具注解标记为可能修改环境；`auto_install=false` 禁用安装，`offline=true` 禁用联网和安装，服务端会按参数区分副作用级别，保留客户端与服务端原有授权模式。官网直读失败且本地无缓存时，默认使用匿名 Parallel 提取对应版本的官方页面，使用 `parallel_fallback=false` 关闭。Parallel 的版本依据弱于官网结构化数据；所有结果都不能代替目标版本的真机验证。详情见 `references/api-lookup.md`。
 
 实现上把 FastMCP 的 `_tool_manager` 换成 `ToolGate` 代理。`list_tools` 和 `call_tool` 都在
 调用时读取这个属性，因此 stdio、streamable-http、以及客户端直接点名调用被隐藏工具，全部

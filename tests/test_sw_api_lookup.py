@@ -263,6 +263,55 @@ def test_task_context_reuses_lookup_and_preserves_online_toggle(monkeypatch):
     assert "runtime_verified" in prompt and "不可信参考数据" in prompt
 
 
+def test_natural_language_task_detects_grounded_candidates_without_sending_task(monkeypatch):
+    calls = []
+    def lookup(interface, member, version, **kwargs):
+        calls.append((interface, member, version, kwargs["online"]))
+        return {"status": "unknown", "target": None, "typelib": None, "official": None, "warnings": []}
+    monkeypatch.setattr(api, "lookup_api", lookup)
+    job = {"objective": "在 SolidWorks 2026 创建圆形草图并拉伸成零件", "detail": "保密零件名称和尺寸",
+           "uiConfig": {"knowledgeBase": {"officialApiDocsEnabled": False}}}
+    context = build_job_knowledge_context(job)
+    assert calls == [("ISketchManager", "CreateCircleByRadius", 2026, False),
+                     ("IFeatureManager", "FeatureExtrusion3", 2026, False)]
+    assert any("查证候选" in item for item in context["warnings"])
+    assert all("保密" not in repr(item) for item in calls)
+    prompt = compile_codex_prompt({**job, "_knowledgeContext": context})
+    assert "不是强制实现方案" in prompt and "按目标版本查证" in prompt
+
+
+def test_natural_language_negation_and_unrelated_task_do_not_trigger(monkeypatch):
+    monkeypatch.setattr(api, "lookup_api", lambda *a, **k: pytest.fail("unexpected lookup"))
+    assert not build_job_knowledge_context({"objective": "只总结会议记录，不要拉伸"})["warnings"]
+    assert not build_job_knowledge_context({"objective": "列出项目文件"})["warnings"]
+
+
+def test_natural_language_version_conflict_does_not_query(monkeypatch):
+    monkeypatch.setattr(api, "lookup_api", lambda *a, **k: pytest.fail("ambiguous versions"))
+    context = build_job_knowledge_context({"objective": "对比 2024版和 2026版的拉伸行为"})
+    assert any("多个 SolidWorks 年份" in warning for warning in context["warnings"])
+
+
+def test_task_cli_queries_candidates_and_respects_offline(monkeypatch, capsys):
+    calls = []
+    def lookup(interface, member, year, **kwargs):
+        calls.append((interface, member, year, kwargs["online"]))
+        return {"interface": interface, "member": member, "status": "unknown"}
+    monkeypatch.setattr(api, "lookup_api", lookup)
+    monkeypatch.setattr(sys, "argv", ["sw_api_lookup.py", "--task", "SW2026 画圆并拉伸", "--offline"])
+    assert api.main() == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "candidates"
+    assert calls == [("ISketchManager", "CreateCircleByRadius", 2026, False),
+                     ("IFeatureManager", "FeatureExtrusion3", 2026, False)]
+
+
+def test_task_cli_rejects_conflicting_versions_without_lookup(monkeypatch, capsys):
+    monkeypatch.setattr(api, "lookup_api", lambda *a, **k: pytest.fail("must not query"))
+    monkeypatch.setattr(sys, "argv", ["sw_api_lookup.py", "--task", "2024版和2026版的拉伸"])
+    assert api.main() == 2
+    assert "版本" in json.loads(capsys.readouterr().err)["message"]
+
+
 def test_task_context_labels_parallel_and_cached_sources(monkeypatch):
     import hashlib
     text = "CreateCircleByRadius Radius in meters"

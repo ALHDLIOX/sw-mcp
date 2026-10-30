@@ -902,6 +902,7 @@ function App() {
   const [manualReviewDrafts, setManualReviewDrafts] = useState<Record<string, ManualReviewDraft>>({});
   const [workerStatus, setWorkerStatus] = useState<WorkerStatus>({ running: false, message: "桌面端可启动" });
   const [workerAction, setWorkerAction] = useState<"start" | "stop" | "restart" | null>(null);
+  const workerStartingRef = useRef(false);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [submissionKind, setSubmissionKind] = useState<SubmissionKind>(null);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<string | null>(null);
@@ -1152,7 +1153,10 @@ function App() {
       setWorkerStatus({ running: false, message: "请在桌面端启动 worker" });
       return;
     }
+    if (workerStartingRef.current) return;
+    workerStartingRef.current = true;
     setWorkerAction("start");
+    setWorkerStatus({ running: false, message: "正在检测并配置本地环境，首次启动可能需要几分钟。" });
     try {
       const status = await invoke<WorkerStatus>("start_worker", {
         repoPath: runtimeHealth?.skillRoot ?? "",
@@ -1163,7 +1167,8 @@ function App() {
     } catch (error) {
       setWorkerStatus({ running: false, message: `worker 启动失败: ${String(error)}` });
     } finally {
-      setWorkerAction(null);
+      workerStartingRef.current = false;
+      setWorkerAction((current) => current === "start" ? null : current);
     }
   }
 
@@ -1185,7 +1190,10 @@ function App() {
       setWorkerStatus({ running: false, message: "请在桌面端重启 worker" });
       return;
     }
+    if (workerStartingRef.current) return;
+    workerStartingRef.current = true;
     setWorkerAction("restart");
+    setWorkerStatus({ running: false, message: "正在重启执行器并检查本地环境。" });
     try {
       const stopped = await invoke<WorkerStatus>("stop_worker");
       const status = await invoke<WorkerStatus>("start_worker", {
@@ -1201,6 +1209,7 @@ function App() {
     } catch (error) {
       setWorkerStatus({ running: false, message: `worker 重启失败: ${String(error)}` });
     } finally {
+      workerStartingRef.current = false;
       setWorkerAction(null);
     }
   }
@@ -2899,8 +2908,8 @@ function App() {
             <span>本地执行</span>
             <strong>{workerStatus.running ? `运行中 · PID ${workerStatus.pid ?? "-"}` : "未启动"}</strong>
             <p>{workerStatus.health?.heartbeatAt ? `最近心跳 ${workerStatus.health.heartbeatAt}` : runtimeMessage}</p>
-            <button type="button" onClick={() => void (workerStatus.running ? stopLocalWorker() : startLocalWorker())}>
-              {workerStatus.running ? "停止本地执行器" : "启动本地执行器"}
+            <button type="button" disabled={workerAction !== null && workerAction !== "start"} onClick={() => void (workerAction === "start" || workerStatus.running ? stopLocalWorker() : startLocalWorker())}>
+              {workerAction === "start" ? "取消启动" : workerStatus.running ? "停止本地执行器" : "启动本地执行器"}
             </button>
           </article>
           <article className="setting-card status-setting amber">
@@ -3752,8 +3761,8 @@ function App() {
                       {workerAction === "restart" ? "重启中" : "重启执行器"}
                     </button>
                   ) : null}
-                  <button type="button" disabled={workerAction !== null} onClick={() => void (workerStatus.running ? stopLocalWorker() : startLocalWorker())}>
-                    {workerAction === "start" ? "启动中" : workerAction === "stop" ? "停止中" : workerStatus.running ? "停止" : "启动"}
+                  <button type="button" disabled={workerAction !== null && workerAction !== "start"} onClick={() => void (workerAction === "start" || workerStatus.running ? stopLocalWorker() : startLocalWorker())}>
+                    {workerAction === "start" ? "取消启动" : workerAction === "stop" ? "停止中" : workerStatus.running ? "停止" : "启动"}
                   </button>
                   <span>{queueLoaded ? queueSummary : "加载中"}</span>
                 </div>

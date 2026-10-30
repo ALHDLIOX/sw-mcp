@@ -54,8 +54,10 @@ python mcp-server\server.py
 | `SW_MCP_APPROVAL` | `auto` | `auto`：发现模式用 `task`、完整模式用 `client`；`task`：信任客户端的任务授权，不逐次确认；`server`：本地逐次审批账本；`client`：交给客户端逐工具审批，仅允许完整模式；`elicit`：走 MCP elicitation（可能被 agent 自动应答）；`off`：关闭服务端审批 |
 | `SW_MCP_APPROVAL_DIR` | `%LOCALAPPDATA%\SolidWorksMCP\approvals` | 审批账本目录 |
 | `SW_API_LOOKUP_NETWORK` | `on` | 设置 `off` 禁止本项目 API 查证访问官方文档；不控制客户端自己的搜索 |
+| `SW_API_LOOKUP_AUTO_INSTALL` | `on` | 设置 `off` 禁止 API 查证自动安装依赖和恢复帮助文件 |
+| `SW_AUTO_INSTALL_DEPENDENCIES` | `on` | 设置 `off` 禁止基础 COM 预检和桌面执行器自动安装依赖 |
 
-`solidworks_lookup_api` 按目标年份和可选进程 ID 查本机类型库与 API Help，默认读取 SolidWorks 官方文档；直读失败且无缓存时使用匿名 Parallel 备用查询，仅发送公开版本、接口、成员及官方链接。传 `parallel_fallback=false` 禁用 Parallel，`offline=true` 禁用联网并允许使用历史缓存。结果区分版本证据、来源和获取时间，不能代替真机验证。多个目标无法确定时不会猜测或启动 SolidWorks。`solidworks_connect` 支持可选 `version` 年份并检查实际连接版本。
+`solidworks_lookup_api` 支持 `interface` + `member` 或自然语言 `task`，按目标版本查证本机类型库、API Help 和官方文档；直读失败且无缓存时使用匿名 Parallel，仅发送公开版本、接口、成员及官方链接。默认按需自动配置依赖，MCP 注解因此标记为可能修改环境；`auto_install=false` 禁用安装，`offline=true` 禁用联网和安装。服务端会按参数区分副作用，用户配置的服务端审批模式仍然生效。结果区分版本证据、来源和获取时间，不能代替真机验证。多个目标无法确定时不会猜测或启动 SolidWorks。`solidworks_connect` 支持可选 `version` 年份并检查实际连接版本。
 
 ### 任务授权和可选逐次审批
 
@@ -272,7 +274,7 @@ claude mcp add --scope user solidworks -- python C:\path\to\solidworks-automatio
 | `cadstudio_check_routing` | 校验中性 Routing 端点、分段、长度、弯曲半径、碰撞/间隙、支撑和 Routing BOM | 否 |
 | `cadstudio_routing_preflight` | 探测 SOLIDWORKS Routing 类型库、加载项注册和许可证证据；缺证据返回 blocked | 否 |
 | `solidworks_addin_host_status` | 只读检查 C# Add-in 程序集、HKCU/HKLM 注册层级、进程内 UI/事件诊断和阻塞码 | 否 |
-| `solidworks_lookup_api` | 按目标版本查证本地类型库和可选官方 API 文档，不启动或修改 CAD | 否，默认访问官方文档 |
+| `solidworks_lookup_api` | 按目标版本查证 API；默认联网并按需自动安装依赖，不启动或修改 CAD | 按参数：默认可能修改环境；可关闭自动安装 |
 | `cadstudio_fea_preflight` | 探测 CalculiX/Elmer 求解器，不执行任意命令 | 否 |
 | `cadstudio_prepare_fea` | 从 FEA 1.0/1.1 请求生成版本化 CalculiX `.inp`，不运行任意脚本 | 否 |
 | `cadstudio_run_fea` | 运行白名单 CalculiX 线性或受限非线性静力任务并解析位移、应力和收敛证据 | 否 |

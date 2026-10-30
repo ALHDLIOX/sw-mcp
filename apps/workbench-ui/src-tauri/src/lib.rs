@@ -3,9 +3,10 @@ use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
 use serde_json::{json, Value};
 use std::io::Write;
 use std::process::{Child, Command, Output, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::{
     fs,
     fs::OpenOptions,
@@ -33,6 +34,8 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 struct WorkerState {
     child: Mutex<Option<Child>>,
+    starting: Mutex<()>,
+    cancel_start: AtomicBool,
 }
 
 fn queue_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -1328,17 +1331,151 @@ fn command_exists(program: &str, args: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
+fn user_python_path() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        std::env::var_os("LOCALAPPDATA")
+            .map(|root| PathBuf::from(root).join(r"Programs\Python\Python312\python.exe"))
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
+/// @brief 只允许已识别的 Python 命令或固定用户安装路径，绝不经 shell 拼接。
+fn python_process(program: &str) -> Result<Command, String> {
+    match program {
+        "python" | "py" => Ok(Command::new(program)),
+        other => {
+            let expected = user_python_path()
+                .and_then(|path| path.canonicalize().ok())
+                .ok_or_else(|| "未找到用户级 Python 安装。".to_string())?;
+            let actual = Path::new(other)
+                .canonicalize()
+                .map_err(|_| "无法验证 Python 路径。".to_string())?;
+            if actual != expected {
+                return Err("拒绝不受信任的 Python 路径。".to_string());
+            }
+            Ok(Command::new(expected))
+        }
+    }
+}
+
+fn python_compatible(program: &str, args: &[&str]) -> bool {
+    let Ok(mut command) = python_process(program) else {
+        return false;
+    };
+    command
+        .args(args)
+        .arg("-c")
+        .arg("import sys; sys.exit(0 if sys.version_info >= (3, 10) else 2)");
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+    command_output_with_timeout(&mut command, Duration::from_secs(5))
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
 fn python_command() -> Result<(String, Vec<String>), String> {
-    if command_exists("python", &[]) {
+    if python_compatible("python", &[]) {
         return Ok(("python".to_string(), Vec::new()));
     }
-    if command_exists("py", &["-3"]) {
+    if python_compatible("py", &["-3"]) {
         return Ok(("py".to_string(), vec!["-3".to_string()]));
+    }
+    if let Some(path) = user_python_path().filter(|path| path.is_file()) {
+        let program = path.to_string_lossy().to_string();
+        if python_compatible(&program, &[]) {
+            return Ok((program, Vec::new()));
+        }
     }
     Err(
         "没有找到 Python。请先安装 Python 3，或把 python/py 加入 PATH 后再启动本地执行器。"
             .to_string(),
     )
+}
+
+/// @brief 仅在启动 worker 时按需安装 Python；环境诊断保持只读。
+fn ensure_worker_python(cancelled: &AtomicBool) -> Result<(String, Vec<String>), String> {
+    if cancelled.load(Ordering::SeqCst) {
+        return Err("已取消本地执行器启动。".to_string());
+    }
+    if let Ok(python) = python_command() {
+        return if cancelled.load(Ordering::SeqCst) {
+            Err("已取消本地执行器启动。".to_string())
+        } else {
+            Ok(python)
+        };
+    }
+    if cancelled.load(Ordering::SeqCst) {
+        return Err("已取消本地执行器启动。".to_string());
+    }
+    if std::env::var("SW_AUTO_INSTALL_DEPENDENCIES")
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "off" | "false" | "0"
+            )
+        })
+        .unwrap_or(false)
+    {
+        return Err("未找到 Python，且自动安装已关闭。".to_string());
+    }
+    #[cfg(windows)]
+    {
+        let mut installer = Command::new("winget");
+        installer.args([
+            "install",
+            "--id",
+            "Python.Python.3.12",
+            "--exact",
+            "--source",
+            "winget",
+            "--scope",
+            "user",
+            "--silent",
+            "--disable-interactivity",
+            "--accept-package-agreements",
+            "--accept-source-agreements",
+        ]);
+        installer
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW);
+        let mut child = installer.spawn().map_err(|_| {
+            "没有找到 Python，且无法启动 winget 自动安装。请安装 Python 3.10+ 后重试。".to_string()
+        })?;
+        let deadline = Instant::now() + Duration::from_secs(300);
+        let status = loop {
+            if cancelled.load(Ordering::SeqCst) {
+                let _ = terminate_process_tree(&mut child);
+                return Err("已取消 Python 自动安装。".to_string());
+            }
+            if Instant::now() >= deadline {
+                let _ = terminate_process_tree(&mut child);
+                return Err("Python 自动安装超时，请检查网络或手动安装后重试。".to_string());
+            }
+            match child.wait_timeout(Duration::from_millis(200)) {
+                Ok(Some(status)) => break status,
+                Ok(None) => {}
+                Err(error) => {
+                    let _ = terminate_process_tree(&mut child);
+                    return Err(format!("Python 自动安装失败: {error}"));
+                }
+            }
+        };
+        if !status.success() {
+            return Err("Python 自动安装失败，请检查 winget、网络或用户权限。".to_string());
+        }
+        python_command()
+            .map_err(|_| "Python 安装完成但尚不能运行，请检查安装或重启应用。".to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("未找到 Python 3.10+；当前平台请先安装 Python。".to_string())
+    }
 }
 
 fn detected_skill_root(app: &AppHandle, requested: Option<&str>) -> Result<PathBuf, String> {
@@ -1796,17 +1933,16 @@ fn detect_autocad() -> Option<PathBuf> {
 
 /// @brief 调用 Skill 的统一环境诊断，非零退出码仍允许读取结构化修复建议。
 fn collect_doctor_report(program: &str, args: &[String], skill_root: &Path) -> Value {
-    // CWE-78: 只把白名单程序名落到子进程入口（调用方传入 python_command 结果）。
-    let mut doctor = match program {
-        "python" => Command::new("python"),
-        "py" => Command::new("py"),
-        other => {
+    // CWE-78: python_process 只接受白名单程序名或固定用户安装位置。
+    let mut doctor = match python_process(program) {
+        Ok(command) => command,
+        Err(error) => {
             return json!({
                 "schemaVersion": "1.0",
                 "summary": { "status": "error" },
                 "checks": [],
                 "remediations": [],
-                "error": format!("拒绝不受信任的 Python 程序: {other}")
+                "error": error
             });
         }
     };
@@ -1848,12 +1984,8 @@ fn collect_runtime_health(app: AppHandle) -> Result<Value, String> {
         .unwrap_or_default();
     let (python, solidworks, doctor) = match python_command() {
         Ok((program, args)) => {
-            // CWE-78: 只把白名单程序名落到子进程入口（python_command 只返回 "python"/"py"）。
-            let mut preflight = match program.as_str() {
-                "python" => Command::new("python"),
-                "py" => Command::new("py"),
-                other => return Err(format!("拒绝不受信任的 Python 程序: {other}")),
-            };
+            // CWE-78: python_process 校验命令和固定用户安装路径。
+            let mut preflight = python_process(&program)?;
             preflight
                 .args(&args)
                 .current_dir(&skill_root)
@@ -2603,43 +2735,59 @@ fn worker_status(app: AppHandle, state: State<'_, WorkerState>) -> Result<Value,
         }
         return Ok(status);
     }
+    let starting = state.starting.try_lock().is_err();
     Ok(json!({
         "running": false,
         "pid": null,
-        "message": "worker 未启动",
+        "message": if starting { "正在检测并配置本地环境" } else { "worker 未启动" },
         "health": read_worker_health(&app)
     }))
 }
 
 #[tauri::command]
-fn start_worker(
+async fn start_worker(
     app: AppHandle,
-    state: State<'_, WorkerState>,
     repo_path: String,
     enable_codex: bool,
     codex_full_access: bool,
 ) -> Result<Value, String> {
-    let mut guard = state.child.lock().map_err(|error| error.to_string())?;
-    if let Some(child) = guard.as_mut() {
-        let pid = child.id();
-        let status = worker_status_from_child(child)?;
-        if status.get("running").and_then(Value::as_bool) == Some(true) {
-            return Ok(status);
+    tauri::async_runtime::spawn_blocking(move || {
+        start_worker_blocking(app, repo_path, enable_codex, codex_full_access)
+    })
+    .await
+    .map_err(|error| format!("本地执行器启动任务失败: {error}"))?
+}
+
+fn start_worker_blocking(
+    app: AppHandle,
+    repo_path: String,
+    enable_codex: bool,
+    codex_full_access: bool,
+) -> Result<Value, String> {
+    let state = app.state::<WorkerState>();
+    let _start_guard = state
+        .starting
+        .try_lock()
+        .map_err(|_| "本地执行器正在启动，请稍候。".to_string())?;
+    state.cancel_start.store(false, Ordering::SeqCst);
+    {
+        let mut guard = state.child.lock().map_err(|error| error.to_string())?;
+        if let Some(child) = guard.as_mut() {
+            let pid = child.id();
+            let status = worker_status_from_child(child)?;
+            if status.get("running").and_then(Value::as_bool) == Some(true) {
+                return Ok(status);
+            }
+            recover_jobs_owned_by_worker(&app, pid)?;
+            *guard = None;
         }
-        recover_jobs_owned_by_worker(&app, pid)?;
-        *guard = None;
     }
 
     let queue = queue_dir(&app)?;
     let _ = fs::remove_file(queue.join("worker_health.json"));
     let repo_path = detected_skill_root(&app, Some(&repo_path))?;
-    let (python, python_args) = python_command()?;
-    // CWE-78: 只把白名单程序名落到子进程入口（python_command 只返回 "python"/"py"）。
-    let mut command = match python.as_str() {
-        "python" => Command::new("python"),
-        "py" => Command::new("py"),
-        other => return Err(format!("拒绝不受信任的 Python 程序: {other}")),
-    };
+    let (python, python_args) = ensure_worker_python(&state.cancel_start)?;
+    let mut command = python_process(&python)?;
     command.args(python_args);
     command
         .current_dir(repo_path)
@@ -2658,6 +2806,10 @@ fn start_worker(
     #[cfg(windows)]
     command.creation_flags(CREATE_NO_WINDOW);
 
+    let mut guard = state.child.lock().map_err(|error| error.to_string())?;
+    if state.cancel_start.load(Ordering::SeqCst) {
+        return Err("已取消本地执行器启动。".to_string());
+    }
     let child = command
         .spawn()
         .map_err(|error| format!("本地执行器启动失败: {error}"))?;
@@ -2817,6 +2969,7 @@ fn recover_jobs_owned_by_worker(app: &AppHandle, worker_pid: u32) -> Result<u64,
 
 fn stop_worker_process(app: &AppHandle) -> Result<Value, String> {
     let state = app.state::<WorkerState>();
+    state.cancel_start.store(true, Ordering::SeqCst);
     let mut guard = state.child.lock().map_err(|error| error.to_string())?;
     if let Some(mut child) = guard.take() {
         let pid = child.id();
@@ -2835,6 +2988,11 @@ fn stop_worker_process(app: &AppHandle) -> Result<Value, String> {
                 return Err(format!("worker 停止失败: {error}"));
             }
         }
+    }
+    drop(guard);
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while state.starting.try_lock().is_err() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(50));
     }
     Ok(json!({
         "running": false,
@@ -3043,6 +3201,8 @@ pub fn run() {
     tauri::Builder::default()
         .manage(WorkerState {
             child: Mutex::new(None),
+            starting: Mutex::new(()),
+            cancel_start: AtomicBool::new(false),
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -3231,6 +3391,20 @@ mod tests {
         assert!(validate_new_queue_job(&job)
             .expect_err("invalid parallel switch")
             .contains("parallelApiFallbackEnabled"));
+    }
+
+    #[test]
+    fn python_process_rejects_arbitrary_programs() {
+        assert!(super::python_process("python").is_ok());
+        assert!(super::python_process("py").is_ok());
+        assert!(super::python_process("untrusted-python.exe").is_err());
+    }
+
+    #[test]
+    fn cancelled_worker_start_never_attempts_installation() {
+        let cancelled = std::sync::atomic::AtomicBool::new(true);
+        let error = super::ensure_worker_python(&cancelled).expect_err("cancelled start");
+        assert!(error.contains("取消"));
     }
 
     #[test]

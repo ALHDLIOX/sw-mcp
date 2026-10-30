@@ -27,11 +27,13 @@ try:
     from .sw_process import solidworks_processes
     from .local_api_evidence import load_document, read_local_help, save_document
     from .parallel_api_lookup import ParallelLookupCancelled, retrieve_parallel_document
+    from .api_environment import ensure_python_packages
 except ImportError:
     from cad_installation import discover_installations
     from sw_process import solidworks_processes
     from local_api_evidence import load_document, read_local_help, save_document
     from parallel_api_lookup import ParallelLookupCancelled, retrieve_parallel_document
+    from api_environment import ensure_python_packages
 
 _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
 _MAX_RESPONSE = 2 * 1024 * 1024
@@ -393,7 +395,7 @@ def _cached_official_document(version: int, interface: str, member: str, *,
 
 def lookup_api(interface: str, member: str, version: int | None = None, *,
                process_id: int | None = None, online: bool = True,
-               parallel_fallback: bool = True,
+               parallel_fallback: bool = True, auto_install: bool = True,
                cancelled: Callable[[], bool] | None = None) -> dict[str, Any]:
     """默认查官方文档；直读失败时可使用匿名 Parallel 备用提取。"""
     interface, member = _identifier(interface, "interface"), _identifier(member, "member")
@@ -406,6 +408,15 @@ def lookup_api(interface: str, member: str, version: int | None = None, *,
     result: dict[str, Any] = {"interface": interface, "member": member, "status": "unknown",
                               "target": None, "typelib": None, "local_help": None, "official": None, "warnings": [],
                               "runtime_verified": False}
+    network_enabled = online and os.environ.get("SW_API_LOOKUP_NETWORK", "on").strip().lower() not in {"off", "false", "0"}
+    setup_allowed = network_enabled and auto_install
+    if os.name == "nt":
+        setup_warning = ensure_python_packages(("pywin32>=305",), ("pythoncom", "win32api"),
+                                               allow_network=setup_allowed, cancelled=cancelled)
+        if setup_warning:
+            result["warnings"].append(setup_warning)
+        if cancelled and cancelled():
+            raise LookupCancelled("用户已取消 API 查证")
     try:
         target = _running_target(version, process_id)
         if target is None and process_id is not None:
@@ -418,9 +429,16 @@ def lookup_api(interface: str, member: str, version: int | None = None, *,
             result["target"] = {key: target.get(key) for key in ("year", "revision", "file_version", "process_id", "source")}
             version = int(target["year"])
             result["local_help"] = read_local_help(target["executable"], version, interface, member,
-                                                    official_api_url(version, interface, member))
+                                                    official_api_url(version, interface, member),
+                                                    allow_install=setup_allowed, warnings=result["warnings"],
+                                                    cancelled=cancelled)
+            if cancelled and cancelled():
+                raise LookupCancelled("用户已取消 API 查证")
             if result["local_help"]:
-                result["warnings"].append("本机 API Help 来自目标安装目录，文件内部版本尚未独立确认。")
+                if result["local_help"].get("version_evidence") == "signed_installer_product_and_file_hash":
+                    result["warnings"].append("本地 API Help 已按签名安装包、产品版本和文件哈希恢复；不代表运行时验证。")
+                else:
+                    result["warnings"].append("本机 API Help 来自目标安装目录，文件内部版本尚未独立确认。")
             library_names = ("swconst.tlb",) if interface.lower().startswith("sw") and not interface.startswith("I") else (
                 "sldworks.tlb", "swmotionstudy.tlb", "SWRoutingLib.tlb", "cmotionswapi.tlb")
             libraries = []
@@ -467,7 +485,7 @@ def lookup_api(interface: str, member: str, version: int | None = None, *,
             result["warnings"].append("本机 API Help 与类型库不一致，请核对安装和文档版本。")
     if version is not None:
         result["official_url"] = official_api_url(version, interface, member)
-        if online and os.environ.get("SW_API_LOOKUP_NETWORK", "on").strip().lower() not in {"off", "false", "0"}:
+        if network_enabled:
             try:
                 result["official"] = _cached_official_document(version, interface, member, cancelled=cancelled)
             except RuntimeError as exc:
@@ -477,6 +495,12 @@ def lookup_api(interface: str, member: str, version: int | None = None, *,
                     result["warnings"].append("官方网页不可用，使用上次获取的本地缓存；不保证是最新内容。")
                 elif parallel_fallback and os.environ.get("SW_API_LOOKUP_PARALLEL", "on").strip().lower() not in {"off", "false", "0"}:
                     try:
+                        setup_warning = ensure_python_packages(("mcp>=1.27,<2", "httpx>=0.27.1,<1"), ("mcp", "httpx"),
+                                                               allow_network=setup_allowed, cancelled=cancelled)
+                        if cancelled and cancelled():
+                            raise LookupCancelled("用户已取消 API 查证")
+                        if setup_warning:
+                            raise RuntimeError(setup_warning)
                         result["official"] = retrieve_parallel_document(version, interface, member,
                                                                           result["official_url"], cancelled=cancelled)
                         result["warnings"].append("官方网页直读失败，已使用匿名 Parallel 提取官方页面；版本仅依据链接和标题，需进一步核对。")
@@ -507,20 +531,58 @@ def lookup_api(interface: str, member: str, version: int | None = None, *,
     return result
 
 
+def lookup_task(task: str, version: int | None = None, *, process_id: int | None = None,
+                online: bool = True, parallel_fallback: bool = True, auto_install: bool = True,
+                cancelled: Callable[[], bool] | None = None) -> dict[str, Any]:
+    """本地识别自然语言候选；只向外部发送候选 API 标识。"""
+    if not isinstance(task, str) or not task.strip() or len(task) > 10000:
+        raise ValueError("task 必须是 1 至 10000 字符的任务描述")
+    if version is not None and (isinstance(version, bool) or not isinstance(version, int) or not 2010 <= version <= 2035):
+        raise ValueError("version 必须是 2010 至 2035 的年份")
+    if process_id is not None and (isinstance(process_id, bool) or not isinstance(process_id, int) or process_id <= 0):
+        raise ValueError("process_id 必须是正整数")
+    try:
+        from .api_intent import task_candidates, task_years
+    except ImportError:
+        from api_intent import task_candidates, task_years
+    candidates, _ = task_candidates(task)
+    years = task_years(task)
+    if len(years) > 1 or (version is not None and years and version not in years):
+        raise ValueError("任务包含多个或不一致的 SolidWorks 版本，请明确目标版本")
+    year = version if version is not None else next(iter(years), None)
+    results = [lookup_api(interface, member, year, process_id=process_id, online=online,
+                          parallel_fallback=parallel_fallback, auto_install=auto_install, cancelled=cancelled)
+               for interface, member in candidates]
+    return {"status": "candidates" if results else "no_candidate", "results": results,
+            "warning": "候选仅供查证，实际方法须由任务规划与目标版本证据确认。"}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="只读查询目标 SolidWorks 版本的 API 接口")
-    parser.add_argument("interface", help="例如 ISketchManager")
-    parser.add_argument("member", help="例如 CreateCircleByRadius")
+    parser.add_argument("interface", nargs="?", help="例如 ISketchManager")
+    parser.add_argument("member", nargs="?", help="例如 CreateCircleByRadius")
+    parser.add_argument("--task", help="根据自然语言识别候选，最多查询两个；任务全文不会发送到在线查证服务")
     parser.add_argument("--version", type=int, help="目标 SolidWorks 年份")
     parser.add_argument("--process-id", type=int, help="目标运行实例 PID")
     parser.add_argument("--offline", action="store_true", help="不访问网络，使用本地资料及历史缓存")
     parser.add_argument("--no-parallel", action="store_true", help="仅访问官方网页，不使用 Parallel 备用服务")
+    parser.add_argument("--no-auto-install", action="store_true", help="不自动安装依赖或恢复本地帮助")
     args = parser.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     try:
-        print(json.dumps(lookup_api(args.interface, args.member, args.version, process_id=args.process_id,
-                                    online=not args.offline, parallel_fallback=not args.no_parallel), ensure_ascii=False, indent=2))
+        if args.task:
+            if args.interface or args.member:
+                raise ValueError("--task 与接口/成员位置参数不能同时使用")
+            output = lookup_task(args.task, args.version, process_id=args.process_id, online=not args.offline,
+                                 parallel_fallback=not args.no_parallel, auto_install=not args.no_auto_install)
+        else:
+            if not args.interface or not args.member:
+                raise ValueError("请提供接口和成员，或使用 --task 输入自然语言任务")
+            output = lookup_api(args.interface, args.member, args.version, process_id=args.process_id,
+                                online=not args.offline, parallel_fallback=not args.no_parallel,
+                                auto_install=not args.no_auto_install)
+        print(json.dumps(output, ensure_ascii=False, indent=2))
         return 0
     except (ValueError, LookupCancelled) as exc:
         print(json.dumps({"status": "error", "message": str(exc)}, ensure_ascii=False), file=sys.stderr)

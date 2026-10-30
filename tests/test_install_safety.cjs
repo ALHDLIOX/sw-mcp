@@ -23,6 +23,10 @@ const {
   inspectTarget,
   backupDirName,
   installToDir,
+  detectPython,
+  bootstrapPython,
+  installDependencies,
+  registerMcp,
 } = require('../install.js');
 
 function tempDir() {
@@ -31,10 +35,11 @@ function tempDir() {
 
 // ---------------------------------------------------------------- 参数解析
 
-test('默认参数：自动模式、不装依赖、会注册 MCP', () => {
+test('默认参数：自动模式、安装依赖、会注册 MCP，可显式关闭依赖安装', () => {
   const options = parseArgs([]);
   assert.equal(options.targets, null);
-  assert.equal(options.installDeps, false);
+  assert.equal(options.installDeps, true);
+  assert.equal(parseArgs(['--no-install-deps']).installDeps, false);
   assert.equal(options.registerMcp, true);
   assert.equal(options.forceReinstall, false);
   assert.equal(options.dryRun, false);
@@ -52,6 +57,49 @@ test('未知客户端、未知参数、缺值都直接报错', () => {
   assert.throws(() => parseArgs(['--nope']), /未知参数/);
   assert.throws(() => parseArgs(['--target']), /需要一个值/);
   assert.throws(() => parseArgs(['--target', '--dry-run']), /需要一个值/);
+});
+
+test('只选择可运行的 Python 3.10+ 并返回解释器路径', () => {
+  const calls = [];
+  const run = (name, args) => {
+    calls.push([name, args]);
+    return name === 'py' ? { status: 0, stdout: 'C:\\Python312\\python.exe\n' } : { status: 1, stdout: '' };
+  };
+  assert.equal(detectPython(run, {}), 'C:\\Python312\\python.exe');
+  assert.ok(calls[0][1].join(' ').includes('sys.version_info < (3, 10)'));
+});
+
+test('缺少 Python 时只使用用户级官方 winget 包，失败不会假装成功', () => {
+  const calls = [];
+  const run = (name, args) => { calls.push([name, args]); return { status: 0 }; };
+  assert.equal(bootstrapPython('win32', run, () => 'C:\\Python312\\python.exe'), 'C:\\Python312\\python.exe');
+  assert.ok(calls[1][1].includes('Python.Python.3.12'));
+  assert.ok(calls[1][1].includes('user'));
+  assert.equal(bootstrapPython('win32', () => ({ status: 1 }), () => 'unexpected'), null);
+});
+
+test('依赖安装使用用户目录并准确报告失败', () => {
+  const calls = [];
+  const run = (name, args) => {
+    calls.push([name, args]);
+    return args.includes('-c') ? { status: 0, stdout: '0\n' } : { status: 1 };
+  };
+  const result = installDependencies('C:\\skill', () => 'C:\\Python312\\python.exe', () => null, run);
+  assert.equal(result.ok, false);
+  assert.ok(calls[1][1].includes('--user'));
+  assert.ok(calls[1][1].includes('--no-input'));
+});
+
+test('MCP 注册复用已选择的 Python，失败时返回失败且不重复安装依赖', () => {
+  const root = tempDir();
+  fs.mkdirSync(path.join(root, 'mcp-server'));
+  fs.writeFileSync(path.join(root, 'mcp-server', 'register_all_ai_mcp.js'), '');
+  const calls = [];
+  const run = (name, args) => { calls.push([name, args]); return { status: 1 }; };
+  const ok = registerMcp([{ client: 'codex', targetDir: root }], { installDeps: true, dryRun: false }, 'C:\\Python312\\python.exe', run);
+  assert.equal(ok, false);
+  assert.ok(calls[0][1].includes('--python'));
+  assert.ok(!calls[0][1].includes('--install-dependencies'));
 });
 
 // ---------------------------------------------------------------- 目标选择
