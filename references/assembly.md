@@ -1,6 +1,6 @@
 # 装配体与运动配合参考
 
-## 功能原点与整装平移（SW2026 实测）
+## 功能原点与整装平移（SW2024 SP5 实测）
 
 以光轴交点等功能点重设原生装配原点时，先从组件 B-Rep 轴线与 Transform2 计算交点，保留原装配备份并在副本试算。仅移动一个浮动基准组件并调用 SetTransformAndSolve2，返回 True 也可能没有带动整个配合网络；必须逐件回读位姿。已验证的整装平移路线是记录未压缩配合、临时压缩这些配合、解除基准组件固定、逐件写入统一平移后的 Transform2，再恢复原有配合状态并重建。原本压缩的配合应保持压缩。最终采用功能定位配合时，应核对距离配合的符号分支；创建成功、完全约束都不能代替轴线到原点距离检查。
 
@@ -229,12 +229,17 @@ Gear Mate 不负责防止齿轮实体穿透；它只建立旋转比例关系。�
 - 用 Mate Controller 保存几个关键位置并生成 Motion Study 动画。
 
 ```python
-interference = asm.InterferenceDetection
-interference.TreatSubAssembliesAsComponents = False
-interference.TreatCoincidenceAsInterference = False
-interference.Done()
-count = interference.GetInterferenceCount()
+from scripts.sw_measure import inspect_interference
+
+result = inspect_interference(asm)
+print(result["status"], result["interference_count"], result["items"])
+# status=blocked 或 count=None 是证据未知，不能解释为零干涉。
 ```
+
+原生对象为 `IAssemblyDoc.InterferenceDetectionManager`；`GetInterferences()` 执行计算，
+必须在读取数量、干涉体积和组件之后才调用 `Done()` 释放管理器。零干涉不能单独证明装配正确。
+多零件结构 Golden 的 Mate、约束状态、自由度和交付验收规范见
+[P0-2 双指夹爪验收](../docs/architecture/real-golden-parallel-gripper-acceptance.md)。
 
 ## 大型装配体建议
 
