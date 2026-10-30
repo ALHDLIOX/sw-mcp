@@ -1,5 +1,11 @@
 # 装配体与运动配合参考
 
+## 功能原点与整装平移（SW2026 实测）
+
+以光轴交点等功能点重设原生装配原点时，先从组件 B-Rep 轴线与 Transform2 计算交点，保留原装配备份并在副本试算。仅移动一个浮动基准组件并调用 SetTransformAndSolve2，返回 True 也可能没有带动整个配合网络；必须逐件回读位姿。已验证的整装平移路线是记录未压缩配合、临时压缩这些配合、解除基准组件固定、逐件写入统一平移后的 Transform2，再恢复原有配合状态并重建。原本压缩的配合应保持压缩。最终采用功能定位配合时，应核对距离配合的符号分支；创建成功、完全约束都不能代替轴线到原点距离检查。
+
+原生参考点可从已完全约束的草图中心点创建：选择 SketchPoint 后调用 FeatureManager.InsertReferencePoint(7, 0, 0.0, 1)，回读 IRefPoint.GetRefPoint().ArrayData 验证坐标。注释可用 SetLeader3 后的 SetLeaderAttachmentPointAtIndex(0, x, y, z) 明确引线端点；SetAttachedEntities 对草图点可能返回 False。根基准面名称仍需兼容中英文，不要假定 FeatureByName("Front Plane") 一定存在。
+
 ## 官方资料入口
 
 - AddMate5: `https://help.solidworks.com/2023/english/api/sldworksapi/solidworks.interop.sldworks~solidworks.interop.sldworks.iassemblydoc~addmate5.html`

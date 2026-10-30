@@ -143,3 +143,12 @@ component = add_component(
 1. 车、机架、壳体等总装外形尺寸应接近原始 STEP。
 2. 不要只验证组件数；组件全部叠在原点时数量和颜色回读也可能全部通过。
 3. `run_review()` 结果必须配合 PNG/BMP 目视检查。
+# STL 坐标与精度核验（2026-10-30）
+
+本机 interop 的 `swSTLQuality_e` 为 Coarse=1、Fine=2、Custom=3；Fine 不应传 0。
+用于重建装配动画的零件 STL 应保持原零件坐标。导出前临时启用
+`ISldWorks.SetUserPreferenceToggle(swSTLDontTranslateToPositive=71, True)`，导出后恢复原设置，
+否则负坐标可能逐轴平移到正空间，应用原装配 Transform2 后会错位。回读二进制 STL
+包围范围并与零件坐标核验；同时注意长度单位。`ISldWorks.SetUserPreferenceToggle`
+返回 void，应回读状态，不能用 setter 返回值断言失败。
+
