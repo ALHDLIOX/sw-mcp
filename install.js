@@ -7,7 +7,7 @@
  *      只有显式 --force-reinstall 才把旧目录**重命名**为 <dir>.bak-<时间戳> 后再安装。
  *   2. 不猜客户端。默认只装到「已经存在 skills 目录」的客户端，且绝不凭空创建目录；
  *      要装到指定客户端用 --target。一个都没检测到时给出可复制的命令，而不是替你创建。
- *   3. 副作用显式化。Python 依赖与 MCP 注册都要么由参数触发，要么只打印命令。
+ *   3. 自动配置依赖和注册 MCP；可通过参数关闭，失败必须明确报告。
  *   4. 先给计划再动手。--dry-run 只打印将要执行的动作，不写盘。
  */
 
@@ -42,7 +42,8 @@ const USAGE = `
 选项:
   --target <列表>        装到指定客户端，逗号分隔: claude,codex,cursor,openclaw,agents,all
                          省略时只装到「已存在 skills 目录」的客户端，不会创建目录
-  --install-deps         安装 Python 依赖（requirements.txt + mcp-server/requirements.txt）
+  --install-deps         安装 Python 依赖（默认开启，兼容旧参数）
+  --no-install-deps      不自动安装 Python 依赖
   --no-register-mcp      跳过 MCP 配置注册（默认会注册，覆盖前自动备份 .bak-时间戳）
   --force-reinstall      目标目录已存在且非本仓库检出的，先改名备份再安装（不删除）
   --allow-non-windows    允许在非 Windows 平台安装（仅开放格式能力可用）
@@ -56,7 +57,7 @@ const USAGE = `
 function parseArgs(argv) {
   const options = {
     targets: null,
-    installDeps: false,
+    installDeps: true,
     registerMcp: true,
     forceReinstall: false,
     allowNonWindows: false,
@@ -83,6 +84,8 @@ function parseArgs(argv) {
       options.targets = names;
     } else if (arg === '--install-deps') {
       options.installDeps = true;
+    } else if (arg === '--no-install-deps') {
+      options.installDeps = false;
     } else if (arg === '--no-register-mcp') {
       options.registerMcp = false;
     } else if (arg === '--force-reinstall') {
@@ -180,13 +183,28 @@ function readRemoteUrl(targetDir) {
   }
 }
 
-/** @brief 找到可用的 Python 解释器；找不到返回 null（依赖安装改为打印命令）。 */
-function detectPython() {
-  for (const candidate of ['python', 'py', 'python3']) {
-    const probe = spawnSync(candidate, ['-V'], { encoding: 'utf8', stdio: 'pipe' });
-    if (probe.status === 0) return candidate;
+/** @brief 找到 Python 3.10+ 的实际解释器路径，包括当前用户安装目录。 */
+function detectPython(run = spawnSync, env = process.env) {
+  const userPython = env.LOCALAPPDATA
+    ? path.join(env.LOCALAPPDATA, 'Programs', 'Python', 'Python312', 'python.exe') : null;
+  for (const candidate of [env.PYTHON, 'python', 'py', 'python3', userPython].filter(Boolean)) {
+    const probe = run(candidate, ['-c', 'import sys; sys.exit(2) if sys.version_info < (3, 10) else print(sys.executable)'],
+      { encoding: 'utf8', stdio: 'pipe', timeout: 5000 });
+    if (probe.status === 0 && probe.stdout.trim()) return probe.stdout.trim();
   }
   return null;
+}
+
+/** @brief Windows 缺少 Python 时仅尝试当前用户的官方 winget 包。 */
+function bootstrapPython(platform = process.platform, run = spawnSync, detect = detectPython) {
+  if (platform !== 'win32') return null;
+  const available = run('winget', ['--version'], { encoding: 'utf8', stdio: 'pipe', timeout: 10000 });
+  if (available.status !== 0) return null;
+  console.log('  📦 未找到 Python 3.10+，尝试通过 winget 为当前用户安装 Python 3.12...');
+  const result = run('winget', ['install', '--id', 'Python.Python.3.12', '--exact', '--source', 'winget',
+    '--scope', 'user', '--silent', '--disable-interactivity', '--accept-package-agreements', '--accept-source-agreements'],
+  { stdio: 'inherit', timeout: 300000, windowsHide: true });
+  return result.status === 0 ? detect() : null;
 }
 
 function timestamp() {
@@ -262,22 +280,26 @@ function dependencyCommand(primaryDir) {
   return `cd "${primaryDir}" && python -m pip install -r requirements.txt -r mcp-server/requirements.txt`;
 }
 
-function installDependencies(primaryDir) {
-  const python = detectPython();
+function installDependencies(primaryDir, detect = detectPython, bootstrap = bootstrapPython, run = spawnSync) {
+  const python = detect() || bootstrap();
   if (!python) {
     console.log('  ⚠️  未找到 python，请手动执行:');
     console.log(`     ${dependencyCommand(primaryDir)}`);
-    return;
+    return { ok: false, python: null };
   }
-  const args = ['-m', 'pip', 'install', '-r', 'requirements.txt', '-r', 'mcp-server/requirements.txt'];
-  const result = spawnSync(python, args, { cwd: primaryDir, stdio: 'inherit' });
+  const args = ['-m', 'pip', 'install', '--no-input', '--disable-pip-version-check', '-r', 'requirements.txt', '-r', 'mcp-server/requirements.txt'];
+  const virtualEnv = run(python, ['-c', 'import sys; print(int(sys.prefix != sys.base_prefix))'], { encoding: 'utf8', stdio: 'pipe', timeout: 5000 });
+  if (virtualEnv.status === 0 && virtualEnv.stdout.trim() === '0') args.push('--user');
+  const result = run(python, args, { cwd: primaryDir, stdio: 'inherit', timeout: 300000, windowsHide: true });
   if (result.status !== 0) {
     console.log('  ⚠️  依赖安装未成功，请手动执行:');
     console.log(`     ${dependencyCommand(primaryDir)}`);
+    return { ok: false, python };
   }
+  return { ok: true, python };
 }
 
-function registerMcp(installedDirs, options) {
+function registerMcp(installedDirs, options, python, run = spawnSync) {
   const ordered = CLIENT_PRIORITY
     .map(client => installedDirs.find(item => item.client === client))
     .filter(Boolean);
@@ -285,20 +307,22 @@ function registerMcp(installedDirs, options) {
   const registerScript = path.join(primary.targetDir, 'mcp-server', 'register_all_ai_mcp.js');
   if (!fs.existsSync(registerScript)) {
     console.log(`  ⚠️  未找到 MCP 注册脚本: ${registerScript}`);
-    return;
+    return false;
   }
   const args = [registerScript];
-  if (options.installDeps) args.push('--install-dependencies');
+  if (python) args.push('--python', python);
   if (options.dryRun) {
     console.log(`  [dry-run] node ${args.join(' ')}`);
-    return;
+    return true;
   }
   console.log('  🔌 注册 MCP 配置（覆盖前自动备份 .bak-时间戳）...');
-  const result = spawnSync('node', args, { stdio: 'inherit' });
+  const result = run('node', args, { stdio: 'inherit', timeout: 300000, windowsHide: true });
   if (result.status !== 0) {
     console.log('  ⚠️  MCP 自动注册未完全成功，可稍后手动执行:');
     console.log(`     node "${registerScript}"`);
+    return false;
   }
+  return true;
 }
 
 function main(argv) {
@@ -359,16 +383,19 @@ function main(argv) {
 
   if (installedDirs.length > 0 && !options.dryRun) {
     const primaryDir = installedDirs[0].targetDir;
+    let python = null;
     if (options.installDeps) {
       console.log('\n📦 安装 Python 依赖...');
-      installDependencies(primaryDir);
+      const result = installDependencies(primaryDir);
+      python = result.python;
+      if (!result.ok) failures.push({ client: 'Python 依赖', message: '依赖安装未成功' });
     } else {
-      console.log('\n📦 未安装 Python 依赖（需要时执行，或用 --install-deps 让安装器代跑）:');
+      console.log('\n📦 已关闭 Python 依赖自动安装，可手动执行:');
       console.log(`   ${dependencyCommand(primaryDir)}`);
     }
     if (options.registerMcp) {
       console.log('\n🔌 MCP 注册');
-      registerMcp(installedDirs, options);
+      if (!registerMcp(installedDirs, options, python)) failures.push({ client: 'MCP 注册', message: '自动注册未完成' });
     }
   }
 
@@ -392,6 +419,10 @@ module.exports = {
   inspectTarget,
   backupDirName,
   installToDir,
+  detectPython,
+  bootstrapPython,
+  installDependencies,
+  registerMcp,
 };
 
 if (require.main === module) {

@@ -205,6 +205,7 @@ def compile_codex_prompt(job: dict[str, Any], profile: EnterpriseAgentProfile = 
             "\n".join(knowledge_lines).strip() if knowledge_lines else "本次未检索到相关知识片段；不得据此猜测工程标准或 API。",
             "检索状态: " + ("；".join(str(item)[:300] for item in knowledge_warnings[:8]) if knowledge_warnings else "无警告"),
             "仅把上述片段作为可追溯参考；涉及标准号、材料参数、公差、载荷和安全系数时仍需核对原始标准/手册。",
+            "自然语言识别出的 API 是查证候选，不是强制实现方案。规划中确定需要新 API 时，先通过 solidworks_lookup_api 或 scripts/sw_api_lookup.py 按目标版本查证；离线与网络开关必须遵守。",
             "",
             "【综合机械工程 DAG】",
             engineering_plan_text,

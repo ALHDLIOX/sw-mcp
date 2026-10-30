@@ -18,8 +18,6 @@ from typing import Any, Callable, Iterable
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SUPPORTED_SUFFIXES = {".md", ".txt", ".json", ".yaml", ".yml"}
 TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_+.#/-]*|[\u4e00-\u9fff]")
-API_REFERENCE_PATTERN = re.compile(r"(?<![A-Za-z0-9_])(I[A-Za-z][A-Za-z0-9_]{1,126}|sw[A-Za-z0-9_]{1,124}_e)\s*(?:::|\.)\s*([A-Za-z][A-Za-z0-9_]{0,127})(?![A-Za-z0-9_])")
-SW_YEAR_PATTERN = re.compile(r"(?<![A-Za-z0-9])(?:solidworks|sw)\s*(20\d{2})(?![0-9])", re.IGNORECASE)
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -222,18 +220,22 @@ def retrieve_cloud_knowledge(query: str, config: dict[str, Any], timeout_seconds
 
 
 def _api_knowledge(query: str, config: dict[str, Any], cancelled: Callable[[], bool] | None) -> tuple[list[KnowledgeChunk], list[str]]:
-    """仅对明确的接口与方法进行查证，不将完整任务发到官方服务。"""
-    references = list(dict.fromkeys(API_REFERENCE_PATTERN.findall(query[:10000])))[:2]
+    """显式引用优先，其次从本项目已验证的操作中选择候选；不外发任务全文。"""
+    from scripts.api_intent import task_candidates, task_years
+    references, explicit_keys = task_candidates(query)
     if not references:
         return [], []
     from scripts.sw_api_lookup import lookup_api
 
-    years = {int(year) for year in SW_YEAR_PATTERN.findall(query[:10000]) if 2010 <= int(year) <= 2035}
+    years = task_years(query)
     if len(years) > 1:
         return [], ["任务提到了多个 SolidWorks 年份，请明确指定目标版本后再查证 API。"]
     year = next(iter(years)) if len(years) == 1 else None
     results: list[KnowledgeChunk] = []
     warnings: list[str] = []
+    inferred = [f"{interface}.{member}" for interface, member in references if (interface.casefold(), member.casefold()) not in explicit_keys]
+    if inferred:
+        warnings.append("根据自然语言识别的 API 查证候选：" + "、".join(inferred) + "；实际方法须由任务规划与版本证据确认。")
     online_setting = config.get("officialApiDocsEnabled", True)
     if not isinstance(online_setting, bool):
         warnings.append("官方 API 文档联网设置无效，已使用离线查证。")
@@ -261,7 +263,8 @@ def _api_knowledge(query: str, config: dict[str, Any], cancelled: Callable[[], b
             results.append(KnowledgeChunk(
                 source=local_help["source"], title=local_help["title"], text=local_help["text"], score=0.0,
                 sha256=local_help["sha256"], provider="local-api-help", version=local_help.get("version"),
-                retrieved_at=local_help.get("retrieved_at"), evidence_level="local_help_version_unverified"))
+                retrieved_at=local_help.get("retrieved_at"), evidence_level=("local_help_signed_installer" if
+                    local_help.get("version_evidence") == "signed_installer_product_and_file_hash" else "local_help_version_unverified")))
         official = result.get("official") or {}
         if official.get("status") == "found":
             is_parallel = official.get("provider") == "parallel-anonymous"

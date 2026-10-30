@@ -102,7 +102,7 @@ _DESTRUCTIVE: frozenset[str] = frozenset({
 
 _NOTES: dict[str, str] = {
     "solidworks_health_check": "start_solidworks=true 时会启动或连接 SolidWorks，需审批。",
-    "solidworks_lookup_api": "默认查询官方文档；直读失败且无缓存时使用匿名 Parallel 备用服务，仅发送公开 API 标识及版本；offline=true 可关闭联网。",
+    "solidworks_lookup_api": "默认查询官方文档并按需配置依赖；直读失败且无缓存时使用匿名 Parallel，仅发送公开 API 标识及版本；offline=true 或 auto_install=false 可禁止安装。",
     "cadstudio_check_dfm": "会将检查报告写入输出路径。",
     "cadstudio_check_routing": "会将检查报告写入输出路径。",
     "cadstudio_review_advanced_geometry": "会将预检报告写入输出路径。",
@@ -167,6 +167,13 @@ def classify(tool_name: str, arguments: Any = None) -> tuple[Effect, str]:
         params = arguments.get("params", {})
         if isinstance(params, dict) and params.get("start_solidworks") not in (None, False, 0):
             return Effect.WRITE, "请求启动或连接 SolidWorks 进行检查。"
+    if tool_name == "solidworks_lookup_api":
+        params = arguments.get("params", {}) if isinstance(arguments, dict) else {}
+        if not isinstance(params, dict):
+            return Effect.UNKNOWN, "API 查证参数无效。"
+        if params.get("offline") is True or params.get("auto_install") is False:
+            return Effect.READ, "本次关闭自动安装；查证可读取本地资料及历史缓存。"
+        return Effect.WRITE, _NOTES[tool_name]
     effect = _EFFECTS.get(tool_name, Effect.UNKNOWN)
     if effect is Effect.UNKNOWN:
         return effect, "未登记副作用的工具：默认拒绝，请先在 policy.py 补充分级。"

@@ -32,7 +32,7 @@ from typing import Any, Dict, Literal, Optional
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 _MCP_STDOUT = sys.stdout
@@ -293,15 +293,23 @@ class SolidWorksConnectInput(BaseInput):
 
 
 class SolidWorksApiLookupInput(BaseInput):
-    """Input for version-specific, read-only API evidence lookup."""
+    """Input for version-specific API evidence lookup and optional setup."""
 
-    interface: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z][A-Za-z0-9_]*$")
-    member: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z][A-Za-z0-9_]*$")
+    interface: Optional[str] = Field(default=None, min_length=1, max_length=128, pattern=r"^[A-Za-z][A-Za-z0-9_]*$")
+    member: Optional[str] = Field(default=None, min_length=1, max_length=128, pattern=r"^[A-Za-z][A-Za-z0-9_]*$")
+    task: Optional[str] = Field(default=None, min_length=1, max_length=10000, description="Natural-language task, processed locally to identify API candidates.")
     version: Optional[int] = Field(default=None, ge=2010, le=2035, description="Target SolidWorks year; otherwise identify the current instance or unique installation.")
     process_id: Optional[int] = Field(default=None, gt=0, description="Optional target running SolidWorks process ID.")
     offline: bool = Field(default=False, strict=True, description="Do not access the network; local help and previously retrieved document cache may still be used.")
     parallel_fallback: bool = Field(default=True, strict=True, description="Use anonymous Parallel MCP when direct retrieval fails and no cached document is available.")
+    auto_install: bool = Field(default=True, strict=True, description="Automatically install missing lookup dependencies and recover verified local API Help when online.")
     response_format: ResponseFormat = Field(default=ResponseFormat.JSON, description="Return format.")
+
+    @model_validator(mode="after")
+    def validate_lookup_request(self):
+        if bool(self.task) == bool(self.interface or self.member) or (not self.task and not (self.interface and self.member)):
+            raise ValueError("Provide either task, or both interface and member.")
+        return self
 
 
 class CadStudioBackendRouteInput(BaseInput):
@@ -1773,18 +1781,21 @@ def solidworks_connect(params: SolidWorksConnectInput = SolidWorksConnectInput()
 @mcp.tool(
     name="solidworks_lookup_api",
     title="查证 SolidWorks API 接口",
-    annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True},
+    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True},
 )
 async def solidworks_lookup_api(params: SolidWorksApiLookupInput) -> str:
-    """查证 SolidWorks 接口、方法签名和官方文档；支持指定年份和离线查询，不启动或修改 CAD。"""
-    from scripts.sw_api_lookup import lookup_api
+    """按接口或自然语言任务查证目标版本 API；默认按需配置依赖，可关闭自动安装和联网。"""
+    from scripts.sw_api_lookup import lookup_api, lookup_task
 
     cancelled = threading.Event()
     try:
-        result = await asyncio.to_thread(lookup_api, params.interface, params.member, params.version,
-                                         process_id=params.process_id, online=not params.offline,
-                                         parallel_fallback=params.parallel_fallback,
-                                         cancelled=cancelled.is_set)
+        kwargs = {"process_id": params.process_id, "online": not params.offline,
+                  "parallel_fallback": params.parallel_fallback, "auto_install": params.auto_install,
+                  "cancelled": cancelled.is_set}
+        if params.task:
+            result = await asyncio.to_thread(lookup_task, params.task, params.version, **kwargs)
+        else:
+            result = await asyncio.to_thread(lookup_api, params.interface, params.member, params.version, **kwargs)
         return _result(result, params.response_format)
     except asyncio.CancelledError:
         cancelled.set()
