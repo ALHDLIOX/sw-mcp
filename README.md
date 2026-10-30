@@ -225,8 +225,8 @@ Artifacts + Evidence
 
 原生 SolidWorks 操作当前以 **2026** 为支持与验收目标。方案 B 保留现有执行架构，修复失败状态、原生阵列、草图可编辑性和文档归属，并提供可选 HTTP 与可验证的产物取回。
 
-**完整模式暴露 66 个命名工具；默认发现模式只暴露 3 个检索入口**（`sw_search_tools` /
-`sw_describe_tool` / `sw_call_tool`）。原生命名工具的名称与输入 Schema 保持不变，发现模式只是
+**完整模式暴露 67 个命名工具；默认发现模式只暴露 3 个检索入口**（`sw_search_tools` /
+`sw_describe_tool` / `sw_call_tool`）。原有命名工具保持兼容；发现模式
 按需检索；写操作经过策略检查，审批行为与信任边界取决于配置。模式切换、审批与回滚见
 [`mcp-server/README.md`](mcp-server/README.md)。
 

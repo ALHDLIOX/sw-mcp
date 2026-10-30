@@ -712,6 +712,32 @@ def test_managed_command_refreshes_heartbeat_and_writes_events(tmp_path: Path) -
     assert "codex.completed" in events
 
 
+def test_offline_api_setting_propagates_to_agent_child(tmp_path: Path) -> None:
+    queue_dir = tmp_path / "queue"
+    job_path = queue_dir / "job-offline.json"
+    job = _queued_job("job-offline")
+    job.update({"status": "running", "runnerId": "runner-offline", "leaseUntil": "2099-01-01T00:00:00+08:00",
+                "uiConfig": {"knowledgeBase": {"officialApiDocsEnabled": False}}})
+    write_job(job_path, job)
+    job["_runtime"] = {"jobPath": str(job_path), "runnerId": "runner-offline", "leaseSeconds": 10}
+    completed = _run_command_with_runtime(
+        [sys.executable, "-c", "import os; print(os.environ.get('SW_API_LOOKUP_NETWORK'))"], tmp_path, 5, job)
+    assert completed.returncode == 0 and completed.stdout.strip() == "off"
+
+
+def test_parallel_switch_propagates_to_agent_child(tmp_path: Path) -> None:
+    queue_dir = tmp_path / "queue"
+    job_path = queue_dir / "job-no-parallel.json"
+    job = _queued_job("job-no-parallel")
+    job.update({"status": "running", "runnerId": "runner-offline", "leaseUntil": "2099-01-01T00:00:00+08:00",
+                "uiConfig": {"knowledgeBase": {"parallelApiFallbackEnabled": False}}})
+    write_job(job_path, job)
+    job["_runtime"] = {"jobPath": str(job_path), "runnerId": "runner-offline", "leaseSeconds": 10}
+    completed = _run_command_with_runtime(
+        [sys.executable, "-c", "import os; print(os.environ.get('SW_API_LOOKUP_PARALLEL'))"], tmp_path, 5, job)
+    assert completed.returncode == 0 and completed.stdout.strip() == "off"
+
+
 def test_managed_command_stops_when_cancel_requested(tmp_path: Path) -> None:
     queue_dir = tmp_path / "queue"
     job_path = queue_dir / "job-cancel.json"
@@ -889,6 +915,34 @@ def test_codex_executor_fails_when_structured_output_is_missing(tmp_path: Path, 
         assert "未生成结构化结果文件" in str(error)
     else:
         raise AssertionError("Codex 未写结构化结果时必须失败")
+
+
+def test_api_evidence_flows_from_job_to_agent_prompt(tmp_path: Path, monkeypatch) -> None:
+    """验证真实任务编排路径传递 API 证据，而不是只测试孤立格式化函数。"""
+    output_path = tmp_path / "api-result.json"
+    monkeypatch.setattr("apps.desktop.cad_workbench.queue_worker.codex_output_path", lambda job, cwd: output_path)
+    calls = []
+    def lookup(interface, member, version, **kwargs):
+        calls.append((interface, member, version, kwargs["online"]))
+        return {"status": "documented", "target": None, "typelib": None, "warnings": [], "official": {
+            "status": "found", "source": "https://help.solidworks.com/2024/api/example",
+            "title": "CreateCircleByRadius Method (ISketchManager)", "text": "Radius in meters",
+            "sha256": "reference-hash", "version": 2024, "retrieved_at": "2026-10-29T00:00:00+00:00"}}
+    monkeypatch.setattr("scripts.sw_api_lookup.lookup_api", lookup)
+    job = _queued_job("api-evidence", "create_shell")
+    job.update({"executor": "codex", "cwd": str(Path(__file__).resolve().parents[1]),
+                "objective": "SolidWorks 2024 ISketchManager.CreateCircleByRadius",
+                "detail": "私有项目描述不用于联网查询"})
+    commands = []
+    def runner(command, cwd, timeout_seconds):
+        commands.append(command)
+        output_path.write_text(json.dumps({"summary": "ok", "changedFiles": [], "verification": [],
+                                          "risks": [], "nextSteps": []}), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+    result = run_codex_job(job, runner=runner, timeout_seconds=3)
+    assert calls == [("ISketchManager", "CreateCircleByRadius", 2024, True)]
+    assert "Radius in meters" in commands[0][-1] and "help.solidworks.com/2024" in commands[0][-1]
+    assert "official-api" in result["knowledgeContext"]["providers"]
 
 
 def test_codex_executor_parses_structured_artifacts(tmp_path: Path, monkeypatch) -> None:

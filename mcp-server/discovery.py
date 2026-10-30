@@ -79,6 +79,7 @@ _CONCEPTS: tuple[tuple[str, ...], ...] = (
     ("布线预检", "routing preflight"),
     # 环境与服务
     ("连接软件", "连接solidworks", "连接", "connect solidworks", "connect"),
+    ("接口查证", "查询api", "api文档", "接口签名", "接口参数", "api lookup", "api signature", "lookup api"),
     ("版本信息", "版本号", "版本", "revision", "version", "solidworks version"),
     ("当前文档", "活动文档", "打开的文档", "已打开的文档", "文档列表", "文档状态",
      "open documents", "active document status", "document status", "current document"),

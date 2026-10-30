@@ -13,6 +13,7 @@ can connect without spawning a local child process.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
 import importlib
 import importlib.util
@@ -287,6 +288,19 @@ class SolidWorksConnectInput(BaseInput):
 
     visible: bool = Field(default=True, description="Whether a newly started SolidWorks instance should be visible.")
     wait_seconds: int = Field(default=5, ge=0, le=60, description="Seconds to wait after starting SolidWorks.")
+    version: Optional[int] = Field(default=None, ge=2010, le=2035, description="Optional target SolidWorks year; reject a different connected version.")
+    response_format: ResponseFormat = Field(default=ResponseFormat.JSON, description="Return format.")
+
+
+class SolidWorksApiLookupInput(BaseInput):
+    """Input for version-specific, read-only API evidence lookup."""
+
+    interface: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z][A-Za-z0-9_]*$")
+    member: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z][A-Za-z0-9_]*$")
+    version: Optional[int] = Field(default=None, ge=2010, le=2035, description="Target SolidWorks year; otherwise identify the current instance or unique installation.")
+    process_id: Optional[int] = Field(default=None, gt=0, description="Optional target running SolidWorks process ID.")
+    offline: bool = Field(default=False, strict=True, description="Do not access the network; local help and previously retrieved document cache may still be used.")
+    parallel_fallback: bool = Field(default=True, strict=True, description="Use anonymous Parallel MCP when direct retrieval fails and no cached document is available.")
     response_format: ResponseFormat = Field(default=ResponseFormat.JSON, description="Return format.")
 
 
@@ -1730,21 +1744,53 @@ def solidworks_connect(params: SolidWorksConnectInput = SolidWorksConnectInput()
     """Connect to a running SolidWorks instance or start one; return the SolidWorks version (revision) and active document status."""
 
     def op():
-        sw, model = connect_solidworks(wait_seconds=params.wait_seconds, visible=params.visible)
+        kwargs = {"wait_seconds": params.wait_seconds, "visible": params.visible}
+        if params.version is not None:
+            kwargs["version"] = params.version
+        sw, model = connect_solidworks(**kwargs)
         try:
             process_id = int(get_com_member(sw, "GetProcessID"))
             if process_id <= 0:
                 process_id = None
         except Exception:
             process_id = None
+        revision = str(get_com_member(sw, "RevisionNumber"))
+        try:
+            year = int(revision.split(".", 1)[0]) + 1992
+        except (ValueError, IndexError):
+            year = None
         return {
             "status": "ok",
-            "revision": get_com_member(sw, "RevisionNumber"),
+            "revision": revision,
+            "year": year,
             "process_id": process_id,
             "active_document": _model_summary(model) if model else None,
         }
 
     return _run_locked(op, params.response_format)
+
+
+@mcp.tool(
+    name="solidworks_lookup_api",
+    title="查证 SolidWorks API 接口",
+    annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True},
+)
+async def solidworks_lookup_api(params: SolidWorksApiLookupInput) -> str:
+    """查证 SolidWorks 接口、方法签名和官方文档；支持指定年份和离线查询，不启动或修改 CAD。"""
+    from scripts.sw_api_lookup import lookup_api
+
+    cancelled = threading.Event()
+    try:
+        result = await asyncio.to_thread(lookup_api, params.interface, params.member, params.version,
+                                         process_id=params.process_id, online=not params.offline,
+                                         parallel_fallback=params.parallel_fallback,
+                                         cancelled=cancelled.is_set)
+        return _result(result, params.response_format)
+    except asyncio.CancelledError:
+        cancelled.set()
+        raise
+    except Exception as exc:
+        return _tool_error(exc, params.response_format)
 
 
 @mcp.tool(
@@ -3634,7 +3680,7 @@ _register_native_wire_tools(
 # ---------------------------------------------------------------------------
 # 工具发现（默认）与原生完整模式
 # ---------------------------------------------------------------------------
-# 新版默认只暴露三个入口，把 66 个工具的 Schema 从上下文里拿掉；老客户端可以
+# 新版默认只暴露三个入口，把原生工具的 Schema 从上下文里拿掉；老客户端可以
 # 设置 SW_MCP_DISCOVERY=full 继续用原来的逐工具界面。
 _DISCOVERY_MODE = os.environ.get("SW_MCP_DISCOVERY", "search").strip().lower()
 _APPROVAL_MODE = os.environ.get("SW_MCP_APPROVAL", "auto").strip().lower()

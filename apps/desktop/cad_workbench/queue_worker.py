@@ -902,7 +902,19 @@ def run_agent_job(
             raise ValueError(f"不支持的 Agent Provider: {provider_id}")
         provider = AgentProvider(provider_id, names[provider_id], protocols[provider_id], provider_id in {"codex", "claude"}, True, (provider_id,))
     prompt_job = dict(job)
-    prompt_job["_knowledgeContext"] = build_job_knowledge_context(job)
+    runtime = job.get("_runtime") if isinstance(job.get("_runtime"), dict) else {}
+    job_path = Path(str(runtime["jobPath"])) if runtime.get("jobPath") else None
+    try:
+        prompt_job["_knowledgeContext"] = build_job_knowledge_context(
+            job, cancelled=(lambda: is_cancel_requested(job_path)) if job_path else None)
+    except Exception as exc:
+        from scripts.sw_api_lookup import LookupCancelled
+        if isinstance(exc, LookupCancelled):
+            raise JobCancelled(str(exc)) from exc
+        raise
+    if job_path and prompt_job["_knowledgeContext"].get("warnings"):
+        warning = "；".join(str(item)[:300] for item in prompt_job["_knowledgeContext"]["warnings"][:8])
+        append_event(job_path.parent, job, "knowledge.warning", warning)
     ui_config = job.get("uiConfig") if isinstance(job.get("uiConfig"), dict) else {}
     orchestration = ui_config.get("engineeringOrchestration") if isinstance(ui_config.get("engineeringOrchestration"), dict) else {}
     objective = str(job.get("objective") or job.get("detail") or "")
@@ -1043,6 +1055,13 @@ def _run_command_with_runtime(
     process_label = "Codex" if event_prefix == "codex" else "Agent"
 
     append_event(job_path.parent, job, f"{event_prefix}.started", f"{process_label} 进程已启动", {"cwd": str(cwd), "stdout": str(stdout_path), "stderr": str(stderr_path)})
+    ui_config = job.get("uiConfig") if isinstance(job.get("uiConfig"), dict) else {}
+    knowledge = ui_config.get("knowledgeBase") if isinstance(ui_config.get("knowledgeBase"), dict) else {}
+    child_env = os.environ.copy()
+    if knowledge.get("officialApiDocsEnabled", True) is not True:
+        child_env["SW_API_LOOKUP_NETWORK"] = "off"
+    if knowledge.get("parallelApiFallbackEnabled", True) is not True:
+        child_env["SW_API_LOOKUP_PARALLEL"] = "off"
     with stdout_path.open("w", encoding="utf-8") as stdout_handle, stderr_path.open("w", encoding="utf-8") as stderr_handle:
         process = subprocess.Popen(
             list(command),
@@ -1050,6 +1069,7 @@ def _run_command_with_runtime(
             text=True,
             stdout=stdout_handle,
             stderr=stderr_handle,
+            env=child_env,
         )
 
         while process.poll() is None:

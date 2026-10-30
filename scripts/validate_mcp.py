@@ -47,6 +47,7 @@ REQUIRED_TOOLS = {
     "cadstudio_create_ocp_loft",
     "cadstudio_create_ocp_surface",
     "solidworks_health_check",
+    "solidworks_lookup_api",
     "solidworks_recover",
     "solidworks_connect",
     "solidworks_new_document",

@@ -7,6 +7,8 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -80,6 +82,43 @@ def test_health_check_start_request_is_not_classified_as_read_only():
     assert policy.classify("solidworks_health_check", {"params": {}})[0] is policy.Effect.READ
     assert policy.classify("solidworks_health_check", {"params": {"start_solidworks": True}})[0] is policy.Effect.WRITE
     assert policy.classify("solidworks_connect")[0] is policy.Effect.WRITE
+
+
+def test_connect_forwards_optional_target_version(monkeypatch):
+    import server
+    calls = []
+    class Sw:
+        GetProcessID = 123
+        RevisionNumber = "34.1.1"
+    monkeypatch.setattr(server, "connect_solidworks", lambda **kwargs: (calls.append(kwargs) or Sw(), None), raising=False)
+    monkeypatch.setattr(server, "get_com_member", lambda obj, name: getattr(obj, name), raising=False)
+    monkeypatch.setattr(server, "_run_locked", lambda op, fmt: json.dumps(op()))
+    result = json.loads(server.solidworks_connect(server.SolidWorksConnectInput(version=2026)))
+    assert calls[0]["version"] == 2026 and result["year"] == 2026 and result["process_id"] == 123
+    server.solidworks_connect(server.SolidWorksConnectInput())
+    assert "version" not in calls[1]
+
+
+def test_api_lookup_propagates_cancellation_to_worker(monkeypatch):
+    import server
+    import scripts.sw_api_lookup as api
+    started, stopped = threading.Event(), threading.Event()
+    def lookup(*args, cancelled, **kwargs):
+        started.set()
+        while not cancelled():
+            time.sleep(0.01)
+        stopped.set()
+        raise api.LookupCancelled("cancelled")
+    monkeypatch.setattr(api, "lookup_api", lookup)
+    async def run():
+        task = asyncio.create_task(server.solidworks_lookup_api(
+            server.SolidWorksApiLookupInput(interface="ISketchManager", member="CreateCircleByRadius")))
+        assert await asyncio.to_thread(started.wait, 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert await asyncio.to_thread(stopped.wait, 2)
+    asyncio.run(run())
 
 
 def test_health_check_with_start_requires_approval(tmp_path):
@@ -344,7 +383,7 @@ def test_full_mode_hides_discovery_entries_and_search_mode_hides_tools(tmp_path)
                          ledger=ApprovalLedger(tmp_path / "b"))
     names = {tool.name for tool in full_gate.list_tools()}
     assert names.isdisjoint(DISCOVERY_TOOLS)
-    assert len(names) == 66
+    assert len(names) == 67
 
 
 def test_describe_preserves_original_input_and_output_schema(tmp_path):
@@ -394,6 +433,26 @@ def test_stdio_search_mode_exposes_three_entries_and_blocks_writes(tmp_path):
         assert blocked.isError is True
         assert "需要人工批准" in blocked.content[0].text
 
+    asyncio.run(_with_session(_stdio_env(tmp_path, "search"), handler))
+
+
+def test_stdio_versioned_api_lookup_is_discoverable_and_offline(tmp_path):
+    """从真实 stdio 网关检索、描述并调用版本化 API 查证，不依赖 CAD 安装。"""
+    async def handler(session):
+        result = await session.call_tool("sw_search_tools", {"query": "查证 SolidWorks API 接口签名"})
+        assert not result.isError
+        assert "solidworks_lookup_api" in [item["name"] for item in json.loads(result.content[0].text)["results"]]
+        detail = await session.call_tool("sw_describe_tool", {"name": "solidworks_lookup_api"})
+        assert not detail.isError and json.loads(detail.content[0].text)["inputSchema"]
+        called = await session.call_tool("sw_call_tool", {
+            "name": "solidworks_lookup_api",
+            "arguments": {"params": {"interface": "ISketchManager", "member": "CreateCircleByRadius",
+                                      "version": 2024, "offline": True}},
+        })
+        assert not called.isError
+        value = json.loads(called.content[0].text)
+        assert value["interface"] == "ISketchManager" and value["official"] is None
+        assert value["runtime_verified"] is False
     asyncio.run(_with_session(_stdio_env(tmp_path, "search"), handler))
 
 
@@ -453,7 +512,7 @@ def test_stdio_full_mode_keeps_legacy_surface(tmp_path):
     async def handler(session):
         listed = await session.list_tools()
         names = {tool.name for tool in listed.tools}
-        assert len(names) == 66
+        assert len(names) == 67
         assert names.isdisjoint(DISCOVERY_TOOLS)
         assert "solidworks_save_document" in names
 
