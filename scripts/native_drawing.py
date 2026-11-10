@@ -326,7 +326,15 @@ def generate_drawing(recipe_source, output_dir, *, source_model=None, version=No
                 if view is None:
                     raise RuntimeError("View creation failed: " + item["name"])
                 view.SetName2(item["name"])
-                view.UseSheetScale = 1
+                # Inserting the first view can auto-rescale the sheet (e.g. 1:1 -> 1:2
+                # for a 182-mm part on A3), so pin each view to the recipe scale.
+                view.UseSheetScale = 0
+                view.ScaleDecimal = float(recipe.get("scale", 2))
+                actual_scale = float(get(view, "ScaleDecimal"))
+                if not math.isclose(actual_scale, recipe.get("scale", 2), rel_tol=1e-6):
+                    raise RuntimeError(
+                        f"View {item['name']} scale readback {actual_scale}"
+                    )
                 view.PositionLocked = False
                 if not view.SetDisplayMode3(False, 2, False, False):
                     raise RuntimeError("Hidden-line removal setup failed")
